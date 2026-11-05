@@ -11,6 +11,7 @@ local defaults = {
 }
 
 local config = vim.deepcopy(defaults)
+local active_waits = {}
 
 local function notify_error(message)
 	vim.notify("pi-remarks: " .. message, vim.log.levels.ERROR)
@@ -54,7 +55,7 @@ function M.add(line_start, line_end)
 			local remarks = store.load(root)
 			table.insert(remarks, {
 				path = path,
-				rel = vim.fs.relpath(root, path) or path,
+				relpath = vim.fs.relpath(root, path) or path,
 				line_start = math.min(line_start, line_end),
 				line_end = math.max(line_start, line_end),
 				comment = comment,
@@ -69,7 +70,29 @@ function M.open_list()
 	list.open(current_root())
 end
 
-local function deliver(root, stack, remarks_to_send)
+local function remark_key(remark)
+	return remark.path .. "|" .. remark.line_start .. "|" .. remark.line_end .. "|" .. remark.comment
+end
+
+local function start_wait(herdr_bin, pane_id, timeout_ms)
+	if active_waits[pane_id] then
+		notify_warn("уже ждём завершения хода агента (pane " .. pane_id .. ")")
+		return
+	end
+	local handle = send.wait_idle(herdr_bin, pane_id, timeout_ms, function(wait_error)
+		active_waits[pane_id] = nil
+		if wait_error then
+			notify_warn(wait_error)
+			return
+		end
+		vim.notify("pi-remarks: агент завершил ход", vim.log.levels.INFO)
+	end)
+	if handle then
+		active_waits[pane_id] = handle
+	end
+end
+
+local function deliver(root, remarks_to_send)
 	local message = send.build_message(remarks_to_send)
 	local agents, list_error = send.list_agents(config.herdr_bin)
 	if list_error then
@@ -89,43 +112,33 @@ local function deliver(root, stack, remarks_to_send)
 				notify_error(prompt_error)
 				return
 			end
+			local sent_keys = {}
 			for _, remark in ipairs(remarks_to_send) do
-				remark.sent = true
+				sent_keys[remark_key(remark)] = true
 			end
-			store.save(root, stack)
+			local remarks = store.load(root)
+			for _, remark in ipairs(remarks) do
+				if sent_keys[remark_key(remark)] then
+					remark.sent = true
+				end
+			end
+			store.save(root, remarks)
 			list.refresh(root)
 			vim.notify(("pi-remarks: отправлено (pane %s)"):format(pane_id), vim.log.levels.INFO)
-			send.wait_idle(config.herdr_bin, pane_id, config.wait_timeout_ms, function(wait_error)
-				if wait_error then
-					notify_warn(wait_error)
-					return
-				end
-				vim.notify("pi-remarks: агент завершил ход", vim.log.levels.INFO)
-			end)
+			start_wait(config.herdr_bin, pane_id, config.wait_timeout_ms)
 		end)
 	end)
 end
 
-function M.send_all()
-	local root = current_root()
-	local stack = store.load(root)
-	if #stack == 0 then
-		notify_error("замечаний нет")
-		return
-	end
-	deliver(root, stack, stack)
-end
-
 function M.send_unsent(root)
-	local stack = store.load(root)
 	local unsent = vim.tbl_filter(function(remark)
 		return not remark.sent
-	end, stack)
+	end, store.load(root))
 	if #unsent == 0 then
 		notify_error("неотправленных замечаний нет")
 		return
 	end
-	deliver(root, stack, unsent)
+	deliver(root, unsent)
 end
 
 vim.api.nvim_create_user_command("PiRemarksAdd", function(command)
@@ -137,7 +150,15 @@ vim.api.nvim_create_user_command("PiRemarks", function()
 end, {})
 
 vim.api.nvim_create_user_command("PiRemarksSend", function()
-	M.send_all()
+	M.send_unsent(current_root())
 end, {})
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+	callback = function()
+		for _, handle in pairs(active_waits) do
+			pcall(handle.kill, handle, "term")
+		end
+	end,
+})
 
 return M

@@ -10,12 +10,12 @@ describe("build_message", function()
 	it("renders the header and indented blocks for several remarks", function()
 		local message = send.build_message({
 			{
-				rel = "src/a.lua",
+				relpath = "src/a.lua",
 				line_start = 3,
 				line_end = 7,
 				comment = "первая строка\nвторая строка",
 			},
-			{ rel = "b.go", line_start = 1, line_end = 1, comment = "одиночный комментарий" },
+			{ relpath = "b.go", line_start = 1, line_end = 1, comment = "одиночный комментарий" },
 		})
 		assert.same(
 			table.concat({
@@ -41,16 +41,16 @@ describe("parse_agents", function()
 		assert.same("working", agents[2].agent_status)
 	end)
 
-	it("rejects non-json payloads", function()
+	it("rejects non-json payloads with the decode detail", function()
 		local agents, err = send.parse_agents("not json")
 		assert.is_nil(agents)
-		assert.truthy(err)
+		assert.truthy(err:find("not json", 1, true))
 	end)
 
-	it("rejects payloads without result.agents", function()
+	it("rejects payloads without result.agents and includes the response fragment", function()
 		local agents, err = send.parse_agents("{}")
 		assert.is_nil(agents)
-		assert.truthy(err)
+		assert.truthy(err:find("{}", 1, true))
 	end)
 end)
 

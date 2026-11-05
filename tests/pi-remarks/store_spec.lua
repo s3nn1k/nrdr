@@ -12,8 +12,10 @@ describe("store", function()
 	end)
 
 	after_each(function()
-		vim.fn.delete(store.state_path(root))
-		vim.fn.delete(store.state_path(other_root))
+		for _, path in ipairs({ store.state_path(root), store.state_path(other_root) }) do
+			vim.fn.delete(path)
+			vim.fn.delete(path .. ".*.tmp")
+		end
 		vim.fn.delete(root, "rf")
 		vim.fn.delete(other_root, "rf")
 	end)
@@ -22,7 +24,7 @@ describe("store", function()
 		local remarks = {
 			{
 				path = root .. "/src/a.lua",
-				rel = "src/a.lua",
+				relpath = "src/a.lua",
 				line_start = 3,
 				line_end = 7,
 				comment = "первая строка\nвторая строка",
@@ -30,7 +32,7 @@ describe("store", function()
 			},
 			{
 				path = root .. "/b.go",
-				rel = "b.go",
+				relpath = "b.go",
 				line_start = 1,
 				line_end = 1,
 				comment = "одиночный",
@@ -39,6 +41,7 @@ describe("store", function()
 		}
 		store.save(root, remarks)
 		assert.same(remarks, store.load(root))
+		assert.same("", vim.fn.glob(store.state_path(root) .. ".*.tmp"))
 	end)
 
 	it("returns an empty stack without a saved file", function()
@@ -46,8 +49,8 @@ describe("store", function()
 	end)
 
 	it("keeps different project roots apart", function()
-		store.save(root, { { rel = "a" } })
-		store.save(other_root, { { rel = "b" }, { rel = "c" } })
+		store.save(root, { { relpath = "a" } })
+		store.save(other_root, { { relpath = "b" }, { relpath = "c" } })
 		assert.same(1, #store.load(root))
 		assert.same(2, #store.load(other_root))
 	end)

@@ -37,7 +37,29 @@ function M.save(root, remarks)
 		return
 	end
 	vim.fn.mkdir(state_dir(), "p")
-	vim.fn.writefile({ encoded }, M.state_path(root))
+	local path = M.state_path(root)
+	local tmp_path = path .. "." .. vim.uv.getpid() .. ".tmp"
+	local write_ok, write_err = pcall(vim.fn.writefile, { encoded }, tmp_path)
+	if not write_ok then
+		vim.notify(
+			"pi-remarks: не удалось записать " .. tmp_path .. ": " .. tostring(write_err),
+			vim.log.levels.ERROR
+		)
+		return
+	end
+	local renamed, rename_err = vim.uv.fs_rename(tmp_path, path)
+	if not renamed then
+		pcall(vim.uv.fs_unlink, tmp_path)
+		vim.notify(
+			"pi-remarks: не удалось переместить "
+				.. tmp_path
+				.. " в "
+				.. path
+				.. ": "
+				.. tostring(rename_err),
+			vim.log.levels.ERROR
+		)
+	end
 end
 
 return M

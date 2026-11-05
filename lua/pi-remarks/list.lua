@@ -24,7 +24,7 @@ local function render(bufnr, root)
 	for index, remark in ipairs(remarks) do
 		lines[index] = ("%s %s:%d-%d %s"):format(
 			remark.sent and "[x]" or "[ ]",
-			remark.rel,
+			remark.relpath,
 			remark.line_start,
 			remark.line_end,
 			preview_text(remark.comment)
@@ -112,11 +112,7 @@ local function set_keymaps(bufnr, root)
 			if not confirmed then
 				return
 			end
-			remarks = store.load(root)
-			for index = #remarks, 1, -1 do
-				remarks[index] = nil
-			end
-			store.save(root, remarks)
+			store.save(root, {})
 			render(bufnr, root)
 		end)
 	end, { buffer = bufnr, desc = "pi-remarks: очистить всё" })

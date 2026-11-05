@@ -8,8 +8,8 @@ through `herdr`.
   (`ZZ` confirm, `ZQ` cancel).
 - `:PiRemarks` - stack buffer `pi-remarks://<root>`: `d` delete, `e` edit, `<CR>`
   jump to file:line, `S` send unsent, `C` clear all.
-- `:PiRemarksSend` - send the stack as markdown to the herdr agent running in the
-  project (`cwd` match, otherwise pick from all agents); the agent's turn is then
+- `:PiRemarksSend` - send the unsent remarks as markdown to the herdr agent running in
+  the project (`cwd` match, otherwise pick from all agents); the agent's turn is then
   awaited in the background.
 - Remarks persist per project root (`getcwd()` at add time) in
   `stdpath("state")/pi-remarks/<sha256>.json`.
