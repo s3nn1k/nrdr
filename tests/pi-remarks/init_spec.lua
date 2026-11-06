@@ -357,6 +357,61 @@ describe("send deliver pipeline", function()
 		assert.same(wins_before, #vim.api.nvim_list_wins())
 	end)
 
+	it("refuses adds from the diffview side marked as old", function()
+		local scratch = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_set_current_buf(scratch)
+		vim.b[scratch].diffview_symbol = "a"
+		local wins_before = #vim.api.nvim_list_wins()
+
+		pi.add_line(0)
+
+		assert.truthy(find_notification(vim.log.levels.WARN, "старая ревизия диффа"))
+		assert.same(wins_before, #vim.api.nvim_list_wins())
+	end)
+
+	it("allows adds from the diffview side marked as new", function()
+		local file = vim.fs.normalize(vim.fn.tempname()) .. ".lua"
+		vim.fn.writefile({ "line one", "line two" }, file)
+		local buf = vim.api.nvim_create_buf(false, false)
+		vim.api.nvim_buf_set_name(buf, file)
+		vim.api.nvim_set_current_buf(buf)
+		vim.b[buf].diffview_symbol = "b"
+		vim.wo.diff = true
+		local win_before = vim.api.nvim_get_current_win()
+		local wins_before = #vim.api.nvim_list_wins()
+
+		pi.add_line(0)
+
+		assert.same(wins_before + 1, #vim.api.nvim_list_wins())
+		vim.api.nvim_feedkeys(
+			vim.api.nvim_replace_termcodes("iновая сторона<Esc>ZZ", true, false, true),
+			"mx",
+			false
+		)
+
+		assert.same(1, #store.all())
+		assert.same("новая сторона", store.all()[1].comment)
+		vim.wo[win_before].diff = false
+		vim.fn.delete(file)
+	end)
+
+	it("refuses adds from a diff side that is not the new one", function()
+		local scratch = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_set_current_buf(scratch)
+		vim.b[scratch].diffview_symbol = "local"
+		local wins_before = #vim.api.nvim_list_wins()
+
+		pi.add_line(0)
+
+		assert.truthy(
+			find_notification(
+				vim.log.levels.WARN,
+				"панель local не является новой стороной диффа"
+			)
+		)
+		assert.same(wins_before, #vim.api.nvim_list_wins())
+	end)
+
 	it("does not touch the stack when the agent picker is cancelled", function()
 		store.add(remark("a.lua", "первое"))
 		local prompts_before = #spawns_of("prompt")

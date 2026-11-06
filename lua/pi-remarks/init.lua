@@ -39,15 +39,21 @@ function M.setup(opts)
 	config = vim.tbl_deep_extend("force", defaults, opts or {})
 end
 
-local function diff_panel_guard()
-	if vim.wo.diff and not vim.bo.modifiable then
-		vim.notify(
-			"pi-remarks: старая ревизия диффа — добавляй из правой панели",
-			vim.log.levels.WARN
-		)
-		return false
+local function diff_side_error()
+	local symbol = vim.b.diffview_symbol
+	if symbol == "b" then
+		return nil
 	end
-	return true
+	if symbol == "a" then
+		return "старая ревизия диффа — добавляй из правой панели"
+	end
+	if symbol ~= nil then
+		return ("панель %s не является новой стороной диффа"):format(symbol)
+	end
+	if vim.wo.diff and not vim.bo.modifiable then
+		return "старая ревизия диффа — добавляй из правой панели"
+	end
+	return nil
 end
 
 local function open_comment_popup(path, line_start, line_end)
@@ -71,7 +77,9 @@ local function open_comment_popup(path, line_start, line_end)
 end
 
 function M.add_line(count)
-	if not diff_panel_guard() then
+	local side_error = diff_side_error()
+	if side_error then
+		notify_warn(side_error)
 		return
 	end
 	local path, target_error = file_path()
@@ -85,7 +93,9 @@ function M.add_line(count)
 end
 
 function M.add_range(line_start, line_end)
-	if not diff_panel_guard() then
+	local side_error = diff_side_error()
+	if side_error then
+		notify_warn(side_error)
 		return
 	end
 	local path, target_error = file_path()
