@@ -5,12 +5,24 @@ local function failure_output(done)
 	return vim.trim(output)
 end
 
+local function line_span(remark)
+	if remark.line_start == remark.line_end then
+		return tostring(remark.line_start)
+	end
+	return remark.line_start .. "-" .. remark.line_end
+end
+
 function M.build_message(remarks)
-	local lines = { ("# Замечания ревью (%d)"):format(#remarks), "" }
-	for _, remark in ipairs(remarks) do
-		lines[#lines + 1] = ("- %s:%d-%d"):format(remark.relpath, remark.line_start, remark.line_end)
-		for _, comment_line in ipairs(vim.split(remark.comment, "\n")) do
-			lines[#lines + 1] = "  " .. comment_line
+	local lines = {}
+	for index, remark in ipairs(remarks) do
+		if index > 1 then
+			lines[#lines + 1] = ""
+		end
+		lines[#lines + 1] = ("файл: %s:%s"):format(remark.path, line_span(remark))
+		local comment_lines = vim.split(remark.comment, "\n")
+		lines[#lines + 1] = "комментарий: " .. comment_lines[1]
+		for line_index = 2, #comment_lines do
+			lines[#lines + 1] = "  " .. comment_lines[line_index]
 		end
 	end
 	return table.concat(lines, "\n")

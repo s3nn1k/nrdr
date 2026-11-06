@@ -7,25 +7,24 @@ local agent_list_fixture = [[
 local fixture_agents = vim.json.decode(agent_list_fixture).result.agents
 
 describe("build_message", function()
-	it("renders the header and indented blocks for several remarks", function()
+	it("renders absolute paths and comment blocks separated by blank lines", function()
 		local message = send.build_message({
 			{
-				relpath = "src/a.lua",
+				path = "/abs/src/a.lua",
 				line_start = 3,
 				line_end = 7,
 				comment = "первая строка\nвторая строка",
 			},
-			{ relpath = "b.go", line_start = 1, line_end = 1, comment = "одиночный комментарий" },
+			{ path = "/abs/b.go", line_start = 1, line_end = 1, comment = "одиночный комментарий" },
 		})
 		assert.same(
 			table.concat({
-				"# Замечания ревью (2)",
-				"",
-				"- src/a.lua:3-7",
-				"  первая строка",
+				"файл: /abs/src/a.lua:3-7",
+				"комментарий: первая строка",
 				"  вторая строка",
-				"- b.go:1-1",
-				"  одиночный комментарий",
+				"",
+				"файл: /abs/b.go:1",
+				"комментарий: одиночный комментарий",
 			}, "\n"),
 			message
 		)
