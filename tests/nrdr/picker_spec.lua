@@ -334,6 +334,32 @@ describe("remarks picker", function()
 		assert.same("исправлено", remarks[1].comment)
 	end)
 
+	it("saves the edited comment without crashing when the picker is already closed", function()
+		local entry = {
+			path = "/tmp/proj/a.lua",
+			relpath = "a.lua",
+			line_start = 1,
+			line_end = 1,
+			comment = "до правки",
+		}
+		store.clear()
+		store.add(entry)
+		local captured, restore = telescope_stub({ value = { index = 1, remark = entry } })
+		restore_telescope = restore
+		picker.remarks()
+		-- попап правки пережил закрытие пикера (BufLeave-hook telescope):
+		-- реестр пуст, refresh должен тихо скипнуться
+		package.loaded["telescope.actions.state"].get_current_picker = function()
+			return nil
+		end
+
+		captured.mappings["n:<C-e>"]()
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "после правки" })
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("ZZ", true, false, true), "mx", false)
+
+		assert.same("после правки", store.all()[1].comment)
+	end)
+
 	it("sends remarks through <C-s> by asking for an agent", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
 		restore_telescope = restore
