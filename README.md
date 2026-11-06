@@ -20,7 +20,8 @@ through `herdr`.
 
 ## Setup
 
-`setup()` keys are optional: `herdr_bin` (`"herdr"`), `wait_timeout_ms` (`600000`).
+`setup()` keys are optional: `herdr_bin` (`"herdr"`), `wait_timeout_ms` (`600000`),
+`turn_start_timeout_ms` (`15000`).
 
 ## lazy.nvim spec
 

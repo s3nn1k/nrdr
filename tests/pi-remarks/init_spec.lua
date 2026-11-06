@@ -163,34 +163,14 @@ describe("send deliver pipeline", function()
 
 		wait_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "агент завершил ход")
-		print(
-			"DBG T1-END spawns:",
-			vim.inspect(vim.tbl_map(function(s)
-				return table.concat(s.argv, " ")
-			end, spawns))
-		)
-		print("DBG T1-END active:", vim.inspect(active_waits_dbg and active_waits_dbg() or "n/a"))
 	end)
 
 	it("keeps remarks when the prompt fails", function()
-		print(
-			"DBG T2-START spawns:",
-			vim.inspect(vim.tbl_map(function(s)
-				return table.concat(s.argv, " ")
-			end, spawns))
-		)
 		store.add(remark("a.lua", "первое"))
 
 		pi.send()
 		prompt_exit(1)
 		wait_for_notification(vim.log.levels.ERROR, "завершился с ошибкой")
-		print(
-			"DBG spawns:",
-			vim.inspect(vim.tbl_map(function(s)
-				return table.concat(s.argv, " ")
-			end, spawns))
-		)
-		print("DBG notifications:", vim.inspect(notifications))
 
 		local remarks = store.all()
 		assert.same(1, #remarks)
@@ -206,7 +186,6 @@ describe("send deliver pipeline", function()
 
 		store.add(remark("b.go", "добавлено в полёте"))
 
-		prompt_exit(0)
 		prompt_exit(0)
 		pump()
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")

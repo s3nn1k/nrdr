@@ -97,8 +97,9 @@ local function start_wait(herdr_bin, pane_id, timeout_ms)
 		if start_error then
 			active_waits[pane_id] = nil
 			notify_warn(
-				("ход агента не начался за %dс — сообщение может остаться в очереди"):format(
-					math.floor(config.turn_start_timeout_ms / 1000)
+				("ход агента не начался за %dс — сообщение может остаться в очереди (%s)"):format(
+					math.floor(config.turn_start_timeout_ms / 1000),
+					start_error
 				)
 			)
 			return
