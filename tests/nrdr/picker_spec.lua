@@ -89,6 +89,9 @@ describe("remarks picker", function()
 	local notifications
 	local original_select
 	local select_calls
+	local original_confirm
+	local confirm_calls
+	local confirm_answer
 	local remark_one
 	local remark_two
 	local restore_telescope
@@ -117,6 +120,7 @@ describe("remarks picker", function()
 		}
 		package.loaded["telescope.pickers"] = {
 			new = function(_, options)
+				captured.picker_options = options
 				return {
 					find = function()
 						options.attach_mappings(prompt_bufnr, function(modes, key, callback)
@@ -195,6 +199,13 @@ describe("remarks picker", function()
 		vim.ui.select = function(items, opts, on_choice)
 			table.insert(select_calls, { items = items, opts = opts, on_choice = on_choice })
 		end
+		original_confirm = vim.fn.confirm
+		confirm_calls = {}
+		confirm_answer = 1
+		vim.fn.confirm = function(prompt, choices)
+			table.insert(confirm_calls, { prompt = prompt, choices = choices })
+			return confirm_answer
+		end
 	end)
 
 	after_each(function()
@@ -204,6 +215,9 @@ describe("remarks picker", function()
 		end
 		vim.notify = original_notify
 		vim.ui.select = original_select
+		vim.fn.confirm = original_confirm
+		confirm_calls = nil
+		confirm_answer = nil
 		store.clear()
 		if tmp_file then
 			if vim.fn.bufnr(tmp_file) > 0 then
@@ -230,6 +244,7 @@ describe("remarks picker", function()
 		assert.truthy(captured.mappings["i:<C-e>"])
 		assert.truthy(captured.mappings["i:<C-x>"])
 		assert.truthy(captured.mappings["i:<C-s>"])
+		assert.truthy(captured.picker_options.prompt_title:find("<C-x> очистить", 1, true))
 
 		captured.mappings["n:<C-d>"]()
 
@@ -273,49 +288,41 @@ describe("remarks picker", function()
 		assert.same("правка поверх сдвига", remark_one.comment)
 	end)
 
-	it("previews the remark block with the diff filetype", function()
-		local with_diff = {
+	it("previews the remark block as plain text", function()
+		local entry = {
 			path = "/tmp/proj/a.lua",
 			relpath = "a.lua",
 			line_start = 1,
 			line_end = 1,
 			comment = "первое\nрасшифровка",
-			diff = {
-				header = "@@ -1 +1 @@",
-				body = { " context", "-old", "+new" },
-			},
 		}
 		store.clear()
-		store.add(with_diff)
-		local captured, restore = telescope_stub({ value = { index = 1, remark = with_diff } })
+		store.add(entry)
+		local captured, restore = telescope_stub({ value = { index = 1, remark = entry } })
 		picker.remarks()
 
 		local target = vim.api.nvim_create_buf(false, true)
 		captured.preview_options.define_preview(
 			{ state = { bufnr = target } },
-			{ value = { index = 1, remark = with_diff } }
+			{ value = { index = 1, remark = entry } }
 		)
 
-		assert.same(vim.split(block.remark_block(with_diff), "\n"), vim.api.nvim_buf_get_lines(target, 0, -1, false))
-		assert.same("diff", vim.bo[target].filetype)
+		assert.same(vim.split(block.remark_block(entry), "\n"), vim.api.nvim_buf_get_lines(target, 0, -1, false))
+		assert.same("", vim.bo[target].filetype)
 		vim.api.nvim_buf_delete(target, { force = true })
 	end)
 
-	it("edits the comment through <C-e> and keeps the diff snapshot", function()
-		local with_diff = {
+	it("edits the comment through <C-e>", function()
+		local entry = {
 			path = "/tmp/proj/a.lua",
 			relpath = "a.lua",
 			line_start = 1,
 			line_end = 1,
 			comment = "первое\nрасшифровка",
-			diff = {
-				header = "@@ -1 +1 @@",
-				body = { " context", "-old", "+new" },
-			},
 		}
 		store.clear()
-		store.add(with_diff)
-		local captured, restore = telescope_stub({ value = { index = 1, remark = with_diff } })
+		store.add(entry)
+		local captured, restore = telescope_stub({ value = { index = 1, remark = entry } })
 		picker.remarks()
 
 		captured.mappings["n:<C-e>"]()
@@ -325,7 +332,6 @@ describe("remarks picker", function()
 
 		local remarks = store.all()
 		assert.same("исправлено", remarks[1].comment)
-		assert.same(with_diff.diff, remarks[1].diff)
 	end)
 
 	it("sends remarks through <C-s> by asking for an agent", function()
@@ -384,9 +390,9 @@ describe("remarks picker", function()
 
 		captured.mappings["n:<C-x>"]()
 
-		assert.same(1, #select_calls)
-		assert.same(2, #select_calls[1].items)
-		select_calls[1].on_choice(true)
+		assert.same(1, #confirm_calls)
+		assert.same("очистить все замечания (2)?", confirm_calls[1].prompt)
+		assert.same("&Да\n&Нет", confirm_calls[1].choices)
 
 		assert.same({}, store.all())
 		assert.same(1, captured.closes)
@@ -395,10 +401,10 @@ describe("remarks picker", function()
 	it("keeps the stack through <C-x> on decline", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
 		restore_telescope = restore
+		confirm_answer = 2
 		picker.remarks()
 
 		captured.mappings["n:<C-x>"]()
-		select_calls[1].on_choice(false)
 
 		assert.same(2, #store.all())
 		assert.same(0, captured.closes)
@@ -416,7 +422,7 @@ describe("remarks picker", function()
 
 		captured.mappings["n:<C-x>"]()
 
-		assert.same(0, #select_calls)
+		assert.same(0, #confirm_calls)
 	end)
 
 	it("jumps through :edit when the file buffer is not open", function()
@@ -537,6 +543,7 @@ describe("agent picker", function()
 		}
 		package.loaded["telescope.pickers"] = {
 			new = function(_, options)
+				captured.picker_options = options
 				return {
 					find = function()
 						options.attach_mappings(prompt_bufnr, function(modes, key, callback)
@@ -600,6 +607,8 @@ describe("agent picker", function()
 		picker.agent({ other_one, match, other_two }, cwd, function(pane_id)
 			chosen = pane_id
 		end)
+
+		assert.truthy(captured.picker_options.prompt_title:find("<CR> отправить", 1, true))
 
 		assert.same({ match, other_one, other_two }, captured.last_finder.results)
 		assert.same("reviewer · " .. cwd .. " · idle · p-match", captured.last_finder.entry_maker(match).display())

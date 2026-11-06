@@ -1,4 +1,3 @@
-local diff = require("nrdr.diff")
 local pi = require("nrdr")
 local store = require("nrdr.store")
 
@@ -7,7 +6,6 @@ describe("send deliver pipeline", function()
 	local pane
 	local pane_counter = 0
 	local original_system
-	local real_vim_system
 	local original_notify
 	local original_select
 	local spawns
@@ -64,7 +62,6 @@ describe("send deliver pipeline", function()
 	end
 
 	before_each(function()
-		real_vim_system = vim.system
 		cwd = vim.fs.normalize(vim.fn.getcwd())
 		pane_counter = pane_counter + 1
 		pane = "pane-" .. tostring(pane_counter)
@@ -301,93 +298,6 @@ describe("send deliver pipeline", function()
 
 		assert.is_true(spawns_of("wait")[1].killed)
 		assert.same("term", spawns_of("wait")[1].kill_signal)
-	end)
-
-	it("stores the diff snapshot with add_line in a git repository", function()
-		vim.system = real_vim_system
-		local repo = vim.fs.normalize(vim.fn.tempname()) .. "-repo"
-		vim.fn.mkdir(repo, "p")
-		vim.system({ "git", "-C", repo, "init" }, { text = true }):wait()
-		local file = repo .. "/src/a.go"
-		vim.fn.mkdir(vim.fs.dirname(file), "p")
-		vim.fn.writefile({ "line one", "line two" }, file)
-		vim.system({ "git", "-C", repo, "add", "src/a.go" }, { text = true }):wait()
-		vim.system(
-			{ "git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "file" },
-			{ text = true }
-		)
-			:wait()
-		vim.fn.writefile({ "line one edited", "line two", "line three" }, file)
-
-		local buf = vim.api.nvim_create_buf(false, false)
-		vim.api.nvim_buf_set_name(buf, file)
-		vim.api.nvim_set_current_buf(buf)
-		vim.api.nvim_win_set_cursor(0, { 1, 0 })
-		pi.add_line(0)
-		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iснапшот<Esc>ZZ", true, false, true), "mx", false)
-
-		local remarks = store.all()
-		assert.same(1, #remarks)
-		assert.same("снапшот", remarks[1].comment)
-
-		local git_diff = vim.system({ "git", "-C", repo, "diff", "-U3", "HEAD", "--", "src/a.go" }, { text = true })
-			:wait()
-		local expected = diff.match_hunk(git_diff.stdout, 1, 1)
-		assert.truthy(expected, "git produced a diff")
-		assert.truthy(remarks[1].diff)
-		assert.same(expected.header, remarks[1].diff.header)
-		assert.same(expected.body, remarks[1].diff.body)
-		vim.system = original_system
-		vim.fn.delete(repo, "rf")
-	end)
-
-	it("snapshots against the runtime diff base", function()
-		vim.system = real_vim_system
-		local repo = "/tmp/nrdr-test-base-repo"
-		vim.fn.delete(repo, "rf")
-		local file = repo .. "/src/a.go"
-		vim.fn.mkdir(vim.fs.dirname(file), "p")
-		vim.fn.writefile({ "line one" }, file)
-		for _, argv in ipairs({
-			{ "git", "-C", repo, "init", "-q", "-b", "main" },
-			{ "git", "-C", repo, "add", "." },
-			{ "git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init" },
-		}) do
-			vim.system(argv, { text = true }):wait()
-		end
-		vim.fn.writefile({ "line one", "line two" }, file)
-		for _, argv in ipairs({
-			{ "git", "-C", repo, "switch", "-q", "-c", "feature" },
-			{ "git", "-C", repo, "add", "." },
-			{ "git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "second" },
-		}) do
-			vim.system(argv, { text = true }):wait()
-		end
-
-		local buf = vim.api.nvim_create_buf(false, false)
-		vim.api.nvim_buf_set_name(buf, file)
-		vim.api.nvim_set_current_buf(buf)
-
-		pi.add_line(1)
-		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iпервое<Esc>ZZ", true, false, true), "mx", false)
-		local first = vim.iter(store.all()):find(function(remark)
-			return remark.comment == "первое"
-		end)
-		assert.truthy(first)
-		assert.is_nil(first.diff)
-
-		pi.set_diff_base("main...HEAD")
-		pi.add_line(1)
-		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iвторое<Esc>ZZ", true, false, true), "mx", false)
-		local second = vim.iter(store.all()):find(function(remark)
-			return remark.comment == "второе"
-		end)
-		assert.truthy(second)
-		assert.truthy(second.diff)
-
-		pi.set_diff_base("HEAD")
-		store.clear()
-		vim.fn.delete(repo, "rf")
 	end)
 
 	it("refuses adds from the read-only diff pane", function()

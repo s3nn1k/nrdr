@@ -1,4 +1,3 @@
-local diff = require("nrdr.diff")
 local picker = require("nrdr.picker")
 local popup = require("nrdr.popup")
 local send = require("nrdr.send")
@@ -9,7 +8,6 @@ local M = {}
 local defaults = {
 	herdr_bin = "herdr",
 	wait_timeout_ms = 600000,
-	diff_base = "HEAD",
 	turn_start_timeout_ms = 15000,
 }
 
@@ -51,10 +49,6 @@ function M.setup(opts)
 	config = vim.tbl_deep_extend("force", defaults, opts or {})
 end
 
-function M.set_diff_base(base)
-	config.diff_base = base
-end
-
 local function diff_side_error()
 	local symbol = vim.b.diffview_symbol
 	if symbol == "b" then
@@ -86,7 +80,6 @@ local function open_comment_popup(path, line_start, line_end)
 				line_start = line_a,
 				line_end = line_b,
 				comment = comment,
-				diff = diff.snapshot(path, line_a, line_b, config.diff_base),
 			})
 		end,
 	})

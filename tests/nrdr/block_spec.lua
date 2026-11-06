@@ -11,31 +11,19 @@ local function remark(options)
 end
 
 describe("remark_block", function()
-	it("renders the file line, the comment and the hunk body without the header", function()
-		local entry = remark({
-			diff = {
-				header = "@@ -36,9 +36,14 @@ func submitOrder(o Order) error {",
-				body = {
-					" func submitOrder(o Order) error {",
-					"-\titems := flatten(o.Groups)",
-					"+\titems, err := flatten(o.Groups)",
-				},
-			},
-		})
+	it("renders the file line and the comment", function()
+		local entry = remark({})
 		assert.same(
 			table.concat({
 				"файл: /abs/src/pay.go:42-58",
 				"комментарий: первая строка",
 				"  вторая строка отступом",
-				" func submitOrder(o Order) error {",
-				"-\titems := flatten(o.Groups)",
-				"+\titems, err := flatten(o.Groups)",
 			}, "\n"),
 			block.remark_block(entry)
 		)
 	end)
 
-	it("renders a single line span and omits the hunk without a diff", function()
+	it("renders a single line span", function()
 		local entry = remark({ line_start = 42, line_end = 42, comment = "одиночный" })
 		assert.same(
 			table.concat({ "файл: /abs/src/pay.go:42", "комментарий: одиночный" }, "\n"),

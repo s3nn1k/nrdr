@@ -19,9 +19,6 @@ function M.remark_block(remark)
 	for index = 2, #comment_lines do
 		lines[#lines + 1] = "  " .. comment_lines[index]
 	end
-	if remark.diff then
-		vim.list_extend(lines, remark.diff.body)
-	end
 	return table.concat(lines, "\n")
 end
 

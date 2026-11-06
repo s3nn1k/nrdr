@@ -106,7 +106,6 @@ local function remark_previewer(previewers)
 				false,
 				vim.split(block.remark_block(entry.value.remark), "\n")
 			)
-			vim.bo[self.state.bufnr].filetype = "diff"
 		end,
 	})
 end
@@ -119,9 +118,12 @@ local function telescope_remarks()
 	local conf = require("telescope.config").values
 	local previewers = require("telescope.previewers")
 
+	local hints =
+		"nrdr | <CR> перейти | <C-d> удалить | <C-e> править | <C-s> отправить | <C-x> очистить"
+
 	pickers
 		.new({}, {
-			prompt_title = "nrdr",
+			prompt_title = hints,
 			finder = remark_finder(finders),
 			sorter = conf.generic_sorter({}),
 			previewer = remark_previewer(previewers),
@@ -168,18 +170,14 @@ local function telescope_remarks()
 					if #remarks == 0 then
 						return
 					end
-					vim.ui.select({ false, true }, {
-						prompt = ("очистить все замечания (%d)?"):format(#remarks),
-						format_item = function(choice)
-							return choice and "да" or "нет"
-						end,
-					}, function(confirmed)
-						if not confirmed then
-							return
-						end
+					local confirmed = vim.fn.confirm(
+						("очистить все замечания (%d)?"):format(#remarks),
+						"&Да\n&Нет"
+					)
+					if confirmed == 1 then
 						store.clear()
 						actions.close(prompt_bufnr)
-					end)
+					end
 				end)
 				map({ "i", "n" }, "<C-s>", function()
 					actions.close(prompt_bufnr)
@@ -238,7 +236,7 @@ local function telescope_agent(agents, root, on_selected)
 
 	pickers
 		.new({}, {
-			prompt_title = "nrdr: агент",
+			prompt_title = "nrdr: агент | <CR> отправить",
 			finder = finders.new_table({
 				results = agents,
 				entry_maker = function(agent)
