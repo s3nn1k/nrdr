@@ -256,19 +256,20 @@ describe("remarks picker", function()
 		assert.same("b.go:4-9", captured.last_finder.entry_maker(captured.last_finder.results[1]).display())
 	end)
 
-	it("edits the comment through <C-e> and the popup", function()
+	it("closes the picker before the <C-e> edit popup", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
 		restore_telescope = restore
 		picker.remarks()
 
 		captured.mappings["n:<C-e>"]()
+		assert.same(1, captured.closes)
+		assert.same(0, captured.refreshes)
 		assert.same({ "первое", "расшифровка" }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
 		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "исправлено" })
 		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("ZZ", true, false, true), "mx", false)
 
 		local remarks = store.all()
 		assert.same("исправлено", remarks[1].comment)
-		assert.same(1, captured.refreshes)
 	end)
 
 	it("edits exactly the captured remark when indices shift during the popup", function()
@@ -312,29 +313,7 @@ describe("remarks picker", function()
 		vim.api.nvim_buf_delete(target, { force = true })
 	end)
 
-	it("edits the comment through <C-e>", function()
-		local entry = {
-			path = "/tmp/proj/a.lua",
-			relpath = "a.lua",
-			line_start = 1,
-			line_end = 1,
-			comment = "первое\nрасшифровка",
-		}
-		store.clear()
-		store.add(entry)
-		local captured, restore = telescope_stub({ value = { index = 1, remark = entry } })
-		picker.remarks()
-
-		captured.mappings["n:<C-e>"]()
-		assert.same({ "первое", "расшифровка" }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
-		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "исправлено" })
-		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("ZZ", true, false, true), "mx", false)
-
-		local remarks = store.all()
-		assert.same("исправлено", remarks[1].comment)
-	end)
-
-	it("saves the edited comment without crashing when the picker is already closed", function()
+	it("saves the edited comment without touching the picker registry", function()
 		local entry = {
 			path = "/tmp/proj/a.lua",
 			relpath = "a.lua",
@@ -347,9 +326,10 @@ describe("remarks picker", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = entry } })
 		restore_telescope = restore
 		picker.remarks()
-		-- попап правки пережил закрытие пикера (BufLeave-hook telescope):
-		-- реестр пуст, refresh должен тихо скипнуться
+		-- подтверждение приходит после actions.close: реестр telescope не нужен
+		local probed = false
 		package.loaded["telescope.actions.state"].get_current_picker = function()
+			probed = true
 			return nil
 		end
 
@@ -358,6 +338,7 @@ describe("remarks picker", function()
 		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("ZZ", true, false, true), "mx", false)
 
 		assert.same("после правки", store.all()[1].comment)
+		assert.is_false(probed)
 	end)
 
 	it("sends remarks through <C-s> by asking for an agent", function()

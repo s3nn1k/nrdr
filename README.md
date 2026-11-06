@@ -9,7 +9,8 @@ Code, Codex, and the rest herdr supports) as one message.
   `q` cancel).
 - `hb` - telescope picker over the stack (action hints in the title):
   `file:line` rows, full block in the preview; `<CR>` jump, `<C-d>` delete,
-  `<C-e>` edit, `<C-s>` send, `<C-x>` clear all after a `Да/Нет` confirm.
+  `<C-e>` edit (the picker closes; reopen with `hb`), `<C-s>` send, `<C-x>` clear
+  all after a `Да/Нет` confirm.
 - `hs` - pick a herdr agent pane and send the stack as one message; sent
   remarks are dropped, the agent's turn is awaited in the background
   (`working` first, then `idle`).

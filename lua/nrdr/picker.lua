@@ -154,10 +154,9 @@ local function telescope_remarks()
 						return
 					end
 					local target = entry.value.remark
-					-- Telescope закрывает пикер по once-BufLeave prompt-буфера (augroup
-					-- PickerInsert); окно попапа правки триггерит его, поэтому гасим hook
-					-- этого пикера, пока открыт попап.
-					pcall(vim.api.nvim_clear_autocmds, { group = "PickerInsert", buffer = prompt_bufnr })
+					-- Пикер закрываем до попапа: floating-окно поверх prompt-буфера
+					-- триггерит BufLeave-hook telescope и теряет фокус после ZZ.
+					actions.close(prompt_bufnr)
 					popup.open({
 						initial = target.comment,
 						on_confirm = function(comment)
@@ -165,7 +164,6 @@ local function telescope_remarks()
 								return
 							end
 							target.comment = comment
-							refresh()
 						end,
 					})
 				end)
