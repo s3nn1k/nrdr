@@ -1,4 +1,4 @@
-local send = require("pi-remarks.send")
+local send = require("nrdr.send")
 
 local agent_list_fixture = [[
 {"result":{"agents":[{"pane_id":"pane-a","agent_status":"idle","cwd":"/tmp/proj-a"},{"pane_id":"pane-b","agent_status":"working","cwd":"/tmp/proj-b"}]}}

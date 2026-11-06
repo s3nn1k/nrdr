@@ -1,4 +1,4 @@
-local block = require("pi-remarks.block")
+local block = require("nrdr.block")
 
 local function remark(options)
 	return vim.tbl_extend("force", {

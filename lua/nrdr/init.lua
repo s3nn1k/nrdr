@@ -1,8 +1,8 @@
-local diff = require("pi-remarks.diff")
-local picker = require("pi-remarks.picker")
-local popup = require("pi-remarks.popup")
-local send = require("pi-remarks.send")
-local store = require("pi-remarks.store")
+local diff = require("nrdr.diff")
+local picker = require("nrdr.picker")
+local popup = require("nrdr.popup")
+local send = require("nrdr.send")
+local store = require("nrdr.store")
 
 local M = {}
 
@@ -17,11 +17,11 @@ local config = vim.deepcopy(defaults)
 local active_waits = {}
 
 local function notify_error(message)
-	vim.notify("pi-remarks: " .. message, vim.log.levels.ERROR)
+	vim.notify("nrdr: " .. message, vim.log.levels.ERROR)
 end
 
 local function notify_warn(message)
-	vim.notify("pi-remarks: " .. message, vim.log.levels.WARN)
+	vim.notify("nrdr: " .. message, vim.log.levels.WARN)
 end
 
 local function file_path()
@@ -146,7 +146,7 @@ local function start_wait(herdr_bin, pane_id, timeout_ms)
 				notify_warn(wait_error)
 				return
 			end
-			vim.notify("pi-remarks: агент завершил ход", vim.log.levels.INFO)
+			vim.notify("nrdr: агент завершил ход", vim.log.levels.INFO)
 		end)
 		if idle_handle then
 			active_waits[pane_id] = idle_handle
@@ -184,7 +184,7 @@ local function deliver(remarks_to_send)
 			store.keep(function(remark)
 				return not sent_keys[remark_key(remark)]
 			end)
-			vim.notify(("pi-remarks: отправлено (pane %s)"):format(pane_id), vim.log.levels.INFO)
+			vim.notify(("nrdr: отправлено (pane %s)"):format(pane_id), vim.log.levels.INFO)
 			start_wait(config.herdr_bin, pane_id, config.wait_timeout_ms)
 		end)
 	end)
@@ -199,7 +199,7 @@ function M.send()
 	deliver(remarks)
 end
 
-vim.api.nvim_create_user_command("PiRemarks", function()
+vim.api.nvim_create_user_command("Nrdr", function()
 	M.pick()
 end, {})
 

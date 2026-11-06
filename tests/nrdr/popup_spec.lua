@@ -1,4 +1,4 @@
-local popup = require("pi-remarks.popup")
+local popup = require("nrdr.popup")
 
 describe("popup", function()
 	local original_notify

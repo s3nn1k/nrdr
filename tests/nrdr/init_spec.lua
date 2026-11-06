@@ -1,6 +1,6 @@
-local diff = require("pi-remarks.diff")
-local pi = require("pi-remarks")
-local store = require("pi-remarks.store")
+local diff = require("nrdr.diff")
+local pi = require("nrdr")
+local store = require("nrdr.store")
 
 describe("send deliver pipeline", function()
 	local cwd

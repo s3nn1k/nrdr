@@ -1,6 +1,6 @@
-local block = require("pi-remarks.block")
-local popup = require("pi-remarks.popup")
-local store = require("pi-remarks.store")
+local block = require("nrdr.block")
+local popup = require("nrdr.popup")
+local store = require("nrdr.store")
 
 local M = {}
 
@@ -63,7 +63,7 @@ local function jump(remark)
 	end
 	if vim.fn.filereadable(remark.path) == 0 then
 		vim.notify(
-			"pi-remarks: файл замечания не существует: " .. remark.relpath,
+			"nrdr: файл замечания не существует: " .. remark.relpath,
 			vim.log.levels.WARN
 		)
 		return
@@ -97,7 +97,7 @@ end
 
 local function remark_previewer(previewers)
 	return previewers.new_buffer_previewer({
-		title = " pi-remarks ",
+		title = " nrdr ",
 		define_preview = function(self, entry)
 			vim.api.nvim_buf_set_lines(
 				self.state.bufnr,
@@ -121,7 +121,7 @@ local function telescope_remarks()
 
 	pickers
 		.new({}, {
-			prompt_title = "pi-remarks",
+			prompt_title = "nrdr",
 			finder = remark_finder(finders),
 			sorter = conf.generic_sorter({}),
 			previewer = remark_previewer(previewers),
@@ -183,7 +183,7 @@ local function telescope_remarks()
 				end)
 				map({ "i", "n" }, "<C-s>", function()
 					actions.close(prompt_bufnr)
-					require("pi-remarks").send()
+					require("nrdr").send()
 				end)
 				return true
 			end,
@@ -197,7 +197,7 @@ local function select_remarks()
 		items[index] = { remark = remark }
 	end
 	vim.ui.select(items, {
-		prompt = "pi-remarks",
+		prompt = "nrdr",
 		format_item = function(item)
 			return M.remark_entry_with_preview(item.remark)
 		end,
@@ -210,7 +210,7 @@ end
 
 function M.remarks()
 	if #store.all() == 0 then
-		vim.notify("pi-remarks: замечаний нет", vim.log.levels.WARN)
+		vim.notify("nrdr: замечаний нет", vim.log.levels.WARN)
 		return
 	end
 	if telescope_available() then
@@ -238,7 +238,7 @@ local function telescope_agent(agents, root, on_selected)
 
 	pickers
 		.new({}, {
-			prompt_title = "pi-remarks: агент",
+			prompt_title = "nrdr: агент",
 			finder = finders.new_table({
 				results = agents,
 				entry_maker = function(agent)
@@ -277,7 +277,7 @@ function M.agent(agents, root, on_selected)
 		return
 	end
 	vim.ui.select(sorted, {
-		prompt = "pi-remarks: выберите агента",
+		prompt = "nrdr: выберите агента",
 		format_item = M.agent_entry,
 	}, function(choice)
 		on_selected(choice and choice.pane_id or nil)

@@ -1,5 +1,5 @@
-local block = require("pi-remarks.block")
-local util = require("pi-remarks.util")
+local block = require("nrdr.block")
+local util = require("nrdr.util")
 
 local M = {}
 

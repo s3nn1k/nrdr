@@ -1,4 +1,4 @@
-local store = require("pi-remarks.store")
+local store = require("nrdr.store")
 
 describe("store", function()
 	local function remark(relpath, comment)

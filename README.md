@@ -1,36 +1,33 @@
-# pi-remarks
+# nrdr
 
-Neovim plugin: collect code-review remarks for a project and hand them to a pi agent through `herdr`.
+Minimal Neovim extension for herdr: stack code-review remarks while you read
+code or a diff, then steer them into any herdr-managed coding agent (pi, Claude
+Code, Codex, and the rest herdr supports) as one message.
 
-- `<leader>pc` (n/v) - stack a remark for the cursor line (+ count) or the visual selection; a floating popup takes the comment (`ZZ` confirm, `q` cancel).
-- Each remark snapshots its diff hunk at add time (`git diff -U3 <diff_base> -- <file>`); long hunks are trimmed to ±10 context lines around the remark with `…` markers; the picker preview and the sent message render it next to the comment.
-- `<leader>pb` - picker over the stored remarks: `<CR>` jump, `<C-d>` delete, `<C-e>` edit, `<C-x>` clear, `<C-s>` send; telescope when available, otherwise `vim.ui.select`.
-- `<leader>ps` - send all remarks as markdown to an agent picked from `herdr agent list` (project `cwd` first); the background wait covers the turn starting and finishing.
-- Remarks live in memory for the lifetime of the nvim session; the stack holds only the unsent remainder, sent remarks are removed right after a successful send.
+- `hc` (normal, count) / visual `hc` - stack a remark for a line or selection; a
+  floating ` comment ` popup takes the text (`ZZ` confirm, `q` cancel).
+- `hb` - telescope picker over the stack: `file:line` rows, full comment (and
+  the snapshotted diff hunk) in the preview; `<CR>` jump in the current window,
+  `<C-d>` delete, `<C-e>` edit, `<C-s>` send, `<C-x>` clear all after a confirm.
+- `hs` - pick a herdr agent pane and send the stack as one message; sent
+  remarks are dropped, the agent's turn is awaited in the background
+  (`working` first, then `idle`).
+- Adding from a diffview file snapshots the containing hunk (trimmed to a ±10
+  line window with `…` markers) into the remark; the left (old) diff side is
+  refused through the `diffview_symbol` marker.
+- The stack lives in memory for the nvim session; no files are written.
 
 ## Dependencies
 
-- `herdr` - agent transport (`agent list`, `agent prompt`, `agent wait`)
-- telescope.nvim - loaded by the spec; pickers fall back to `vim.ui.select` without it
+- `herdr` on PATH - agent transport (`agent list`, `agent prompt`, `agent wait`)
+- telescope.nvim - loaded by the spec; pickers fall back to `vim.ui.select`
 - plenary.nvim - tests only
 
 ## Setup
 
-`setup()` keys are optional: `herdr_bin` (`"herdr"`), `wait_timeout_ms` (`600000`), `turn_start_timeout_ms` (`15000`), `diff_base` (`"HEAD"`).
+`setup()` keys are optional: `herdr_bin` (`"herdr"`), `wait_timeout_ms`
+(`600000`), `turn_start_timeout_ms` (`15000`), `diff_base` (`"HEAD"`).
 
-## lazy.nvim spec
+## Gates
 
-```lua
-{
-	dir = vim.fn.expand("~/projects/personal/pi-remarks"),
-	dependencies = { "nvim-telescope/telescope.nvim" },
-	init = function()
-		vim.keymap.set("n", "<leader>pc", function() require("pi-remarks").add_line(vim.v.count) end, { desc = "pi-remarks: add remark" })
-		vim.keymap.set("v", "<leader>pc", function() require("pi-remarks").add_range(vim.fn.line("'<"), vim.fn.line("'>")) end, { desc = "pi-remarks: add remark" })
-		vim.keymap.set("n", "<leader>pb", function() require("pi-remarks").pick() end, { desc = "pi-remarks: browse remarks" })
-		vim.keymap.set("n", "<leader>ps", function() require("pi-remarks").send() end, { desc = "pi-remarks: send remarks" })
-	end,
-}
-```
-
-Gates: `make fmt` / `make lint` (stylua), `make test` (plenary), `make smoke`.
+`make fmt` / `make lint` (stylua), `make test` (plenary), `make smoke`.

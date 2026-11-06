@@ -47,14 +47,14 @@ function M.open(opts)
 	vim.keymap.set("n", "ZZ", function()
 		local text = read_text(bufnr)
 		if vim.trim(text) == "" then
-			vim.notify("pi-remarks: пустой комментарий", vim.log.levels.ERROR)
+			vim.notify("nrdr: пустой комментарий", vim.log.levels.ERROR)
 			return
 		end
 		finish(state, text)
-	end, { buffer = bufnr, desc = "pi-remarks: подтвердить комментарий" })
+	end, { buffer = bufnr, desc = "nrdr: подтвердить комментарий" })
 	vim.keymap.set("n", "q", function()
 		finish(state, nil)
-	end, { buffer = bufnr, desc = "pi-remarks: отменить комментарий" })
+	end, { buffer = bufnr, desc = "nrdr: отменить комментарий" })
 	vim.api.nvim_create_autocmd("BufWipeout", {
 		buffer = bufnr,
 		callback = function()

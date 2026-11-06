@@ -1,4 +1,4 @@
-local util = require("pi-remarks.util")
+local util = require("nrdr.util")
 
 local M = {}
 
@@ -111,7 +111,7 @@ function M.snapshot(path, line_start, line_end, diff_base)
 	end
 	if done.code ~= 0 then
 		vim.notify(
-			"pi-remarks: git diff завершился с ошибкой (code "
+			"nrdr: git diff завершился с ошибкой (code "
 				.. done.code
 				.. "): "
 				.. util.snippet(done.stderr),

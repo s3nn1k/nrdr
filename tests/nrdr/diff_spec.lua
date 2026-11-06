@@ -1,4 +1,4 @@
-local diff = require("pi-remarks.diff")
+local diff = require("nrdr.diff")
 
 local function hunk(header, body)
 	return { header = header, body = body }
@@ -202,7 +202,7 @@ describe("snapshot", function()
 		vim.notify = function(message, level)
 			table.insert(notifications, { message = message, level = level })
 		end
-		local snapshot = diff.snapshot(repo .. "/src/a.go", 1, 1, "--pi-remarks-invalid-base")
+		local snapshot = diff.snapshot(repo .. "/src/a.go", 1, 1, "--nrdr-invalid-base")
 		vim.notify = original_notify
 		assert.is_nil(snapshot)
 		assert.same(1, #notifications)

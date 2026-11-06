@@ -1,6 +1,6 @@
-local block = require("pi-remarks.block")
-local picker = require("pi-remarks.picker")
-local store = require("pi-remarks.store")
+local block = require("nrdr.block")
+local picker = require("nrdr.picker")
+local store = require("nrdr.store")
 
 local function disable_telescope()
 	local saved = package.loaded["telescope.pickers"]
@@ -355,7 +355,7 @@ describe("remarks picker", function()
 
 		captured.mappings["n:<C-s>"]()
 		assert.same(1, #select_calls)
-		assert.same("pi-remarks: выберите агента", select_calls[1].opts.prompt)
+		assert.same("nrdr: выберите агента", select_calls[1].opts.prompt)
 		vim.system = original_system
 	end)
 
@@ -421,7 +421,7 @@ describe("remarks picker", function()
 
 	it("jumps through :edit when the file buffer is not open", function()
 		restore_telescope = disable_telescope()
-		local file = "/tmp/pi-remarks-jump-target.lua"
+		local file = "/tmp/nrdr-jump-target.lua"
 		vim.fn.writefile({ "line one", "line two" }, file)
 		tmp_file = file
 		store.clear()
@@ -438,7 +438,7 @@ describe("remarks picker", function()
 
 	it("clamps the cursor line when the file is shorter than the remark line", function()
 		restore_telescope = disable_telescope()
-		local file = "/tmp/pi-remarks-short-target.lua"
+		local file = "/tmp/nrdr-short-target.lua"
 		vim.fn.writefile({ "only line", "second line" }, file)
 		tmp_file = file
 		store.clear()
@@ -453,7 +453,7 @@ describe("remarks picker", function()
 
 	it("clamps the cursor when the remark points past an open deleted buffer", function()
 		restore_telescope = disable_telescope()
-		local file = "/tmp/pi-remarks-deleted-target.lua"
+		local file = "/tmp/nrdr-deleted-target.lua"
 		vim.fn.writefile({ "line one", "line two" }, file)
 		vim.cmd.edit(vim.fn.fnameescape(file))
 		os.remove(file)
@@ -472,7 +472,7 @@ describe("remarks picker", function()
 
 	it("warns and does nothing when the remark file is missing", function()
 		restore_telescope = disable_telescope()
-		local missing = "/tmp/pi-remarks-missing-target.lua"
+		local missing = "/tmp/nrdr-missing-target.lua"
 		os.remove(missing)
 		store.clear()
 		store.add({ path = missing, relpath = "missing.lua", line_start = 3, line_end = 3, comment = "c" })
