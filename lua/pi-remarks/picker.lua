@@ -254,8 +254,8 @@ local function telescope_agent(agents, root, on_selected)
 			attach_mappings = function(prompt_bufnr, map)
 				map({ "i", "n" }, "<CR>", function()
 					local entry = action_state.get_selected_entry()
-					actions.close(prompt_bufnr)
 					finish(entry and entry.value or nil)
+					actions.close(prompt_bufnr)
 				end)
 				vim.api.nvim_create_autocmd("BufWipeout", {
 					buffer = prompt_bufnr,
