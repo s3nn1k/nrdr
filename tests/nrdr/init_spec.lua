@@ -369,6 +369,25 @@ describe("send deliver pipeline", function()
 		assert.same(wins_before, #vim.api.nvim_list_wins())
 	end)
 
+	it("allows adds from a named nowrite revision buffer", function()
+		local file = vim.fs.normalize(vim.fn.tempname()) .. ".lua"
+		vim.fn.writefile({ "line one" }, file)
+		local buf = vim.api.nvim_create_buf(false, false)
+		vim.api.nvim_buf_set_name(buf, file)
+		vim.api.nvim_set_current_buf(buf)
+		vim.bo[buf].buftype = "nowrite"
+		vim.b[buf].diffview_symbol = "b"
+
+		pi.add_line(0)
+
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iревизия<Esc>ZZ", true, false, true), "mx", false)
+
+		assert.same(1, #store.all())
+		assert.truthy(store.all()[1].path:find(file, 1, true))
+		store.clear()
+		vim.fn.delete(file)
+	end)
+
 	it("allows adds from the diffview side marked as new", function()
 		local file = vim.fs.normalize(vim.fn.tempname()) .. ".lua"
 		vim.fn.writefile({ "line one", "line two" }, file)

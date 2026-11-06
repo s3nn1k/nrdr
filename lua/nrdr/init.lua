@@ -24,8 +24,10 @@ local function notify_warn(message)
 	vim.notify("nrdr: " .. message, vim.log.levels.WARN)
 end
 
+local file_backed_buftypes = { [""] = true, nowrite = true, acwrite = true }
+
 local function file_path()
-	if vim.bo.buftype ~= "" then
+	if not file_backed_buftypes[vim.bo.buftype] then
 		return nil, "буфер не связан с файлом"
 	end
 	local path = vim.fs.normalize(vim.api.nvim_buf_get_name(0))
