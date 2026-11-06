@@ -54,16 +54,28 @@ function M.sort_agents(agents, root)
 	return sorted
 end
 
+local function clamped_line(remark, bufnr)
+	local line_count = vim.api.nvim_buf_line_count(bufnr)
+	return math.max(1, math.min(remark.line_start, line_count))
+end
+
 local function jump(remark)
 	local file_bufnr = vim.fn.bufnr(remark.path)
 	local wins = file_bufnr > 0 and vim.fn.win_findbuf(file_bufnr) or {}
 	if wins[1] then
 		vim.api.nvim_set_current_win(wins[1])
-		vim.api.nvim_win_set_cursor(wins[1], { remark.line_start, 0 })
-	else
-		vim.cmd.edit(vim.fn.fnameescape(remark.path))
-		vim.api.nvim_win_set_cursor(0, { remark.line_start, 0 })
+		vim.api.nvim_win_set_cursor(wins[1], { clamped_line(remark, file_bufnr), 0 })
+		return
 	end
+	if vim.fn.filereadable(remark.path) == 0 then
+		vim.notify(
+			"pi-remarks: файл замечания не существует: " .. remark.relpath,
+			vim.log.levels.WARN
+		)
+		return
+	end
+	vim.cmd.edit(vim.fn.fnameescape(remark.path))
+	vim.api.nvim_win_set_cursor(0, { clamped_line(remark, 0), 0 })
 end
 
 local function remark_results()
@@ -138,17 +150,14 @@ local function telescope_remarks()
 					if not entry then
 						return
 					end
+					local target = entry.value.remark
 					popup.open({
-						initial = entry.value.remark.comment,
+						initial = target.comment,
 						on_confirm = function(comment)
 							if not comment then
 								return
 							end
-							local current = store.all()[entry.value.index]
-							if not current then
-								return
-							end
-							current.comment = comment
+							target.comment = comment
 							refresh()
 						end,
 					})

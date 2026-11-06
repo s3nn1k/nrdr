@@ -254,6 +254,23 @@ describe("remarks picker", function()
 		assert.same(1, captured.refreshes)
 	end)
 
+	it("edits exactly the captured remark when indices shift during the popup", function()
+		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
+		picker.remarks()
+
+		store.remove_index(1)
+
+		captured.mappings["n:<C-e>"]()
+		assert.same({ "первое", "расшифровка" }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "правка поверх сдвига" })
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("ZZ", true, false, true), "mx", false)
+
+		local remarks = store.all()
+		assert.same(1, #remarks)
+		assert.same("второе", remarks[1].comment)
+		assert.same("правка поверх сдвига", remark_one.comment)
+	end)
+
 	it("sends remarks through <C-s> by asking for an agent", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
 		restore_telescope = restore
@@ -362,23 +379,65 @@ describe("remarks picker", function()
 		assert.same(2, vim.api.nvim_win_get_cursor(0)[1])
 	end)
 
-	it("focuses the existing window when the file buffer is already open", function()
+	it("clamps the cursor line when the file is shorter than the remark line", function()
 		restore_telescope = disable_telescope()
-		local file = "/tmp/pi-remarks-jump-target.lua"
-		vim.fn.writefile({ "line one", "line two" }, file)
+		local file = "/tmp/pi-remarks-short-target.lua"
+		vim.fn.writefile({ "only line", "second line" }, file)
 		tmp_file = file
 		store.clear()
-		store.add({ path = file, relpath = "jump-target.lua", line_start = 2, line_end = 2, comment = "c" })
+		store.add({ path = file, relpath = "short.lua", line_start = 10, line_end = 10, comment = "c" })
+
+		picker.remarks()
+		select_calls[1].on_choice(select_calls[1].items[1])
+
+		assert.same(file, vim.api.nvim_buf_get_name(0))
+		assert.same(2, vim.api.nvim_win_get_cursor(0)[1])
+	end)
+
+	it("clamps the cursor when the remark points past an open deleted buffer", function()
+		restore_telescope = disable_telescope()
+		local file = "/tmp/pi-remarks-deleted-target.lua"
+		vim.fn.writefile({ "line one", "line two" }, file)
 		vim.cmd.edit(vim.fn.fnameescape(file))
+		os.remove(file)
+		store.clear()
+		store.add({ path = file, relpath = "deleted.lua", line_start = 10, line_end = 10, comment = "c" })
 		local win_before = vim.api.nvim_get_current_win()
 		local wins_before = #vim.api.nvim_list_wins()
 
 		picker.remarks()
 		select_calls[1].on_choice(select_calls[1].items[1])
 
-		assert.same(wins_before, #vim.api.nvim_list_wins())
 		assert.same(win_before, vim.api.nvim_get_current_win())
+		assert.same(wins_before, #vim.api.nvim_list_wins())
 		assert.same(2, vim.api.nvim_win_get_cursor(win_before)[1])
+	end)
+
+	it("warns and does nothing when the remark file is missing", function()
+		restore_telescope = disable_telescope()
+		local missing = "/tmp/pi-remarks-missing-target.lua"
+		os.remove(missing)
+		store.clear()
+		store.add({ path = missing, relpath = "missing.lua", line_start = 3, line_end = 3, comment = "c" })
+		local wins_before = #vim.api.nvim_list_wins()
+		local buf_before = vim.api.nvim_get_current_buf()
+
+		picker.remarks()
+		select_calls[1].on_choice(select_calls[1].items[1])
+
+		local warned = false
+		for _, call in ipairs(notifications) do
+			if
+				call.level == vim.log.levels.WARN
+				and call.message:find("файл замечания не существует: missing.lua", 1, true)
+			then
+				warned = true
+			end
+		end
+		assert.truthy(warned)
+		assert.same(buf_before, vim.api.nvim_get_current_buf())
+		assert.same(wins_before, #vim.api.nvim_list_wins())
+		assert.same(1, #store.all())
 	end)
 
 	it("warns on an empty stack", function()
