@@ -51,6 +51,10 @@ function M.setup(opts)
 	config = vim.tbl_deep_extend("force", defaults, opts or {})
 end
 
+function M.set_diff_base(base)
+	config.diff_base = base
+end
+
 local function diff_side_error()
 	local symbol = vim.b.diffview_symbol
 	if symbol == "b" then

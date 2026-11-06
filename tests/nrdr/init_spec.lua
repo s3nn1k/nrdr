@@ -342,6 +342,45 @@ describe("send deliver pipeline", function()
 		vim.fn.delete(repo, "rf")
 	end)
 
+	it("snapshots against the runtime diff base", function()
+		local repo = vim.fs.normalize(vim.fn.tempname()) .. "-base-repo"
+		local file = repo .. "/src/a.go"
+		vim.fn.mkdir(vim.fs.dirname(file), "p")
+		vim.fn.writefile({ "line one" }, file)
+		for _, argv in ipairs({
+			{ "git", "-C", repo, "init", "-q", "-b", "main" },
+			{ "git", "-C", repo, "add", "." },
+			{ "git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init" },
+		}) do
+			vim.system(argv, { text = true }):wait()
+		end
+		vim.fn.writefile({ "line one", "line two" }, file)
+		for _, argv in ipairs({
+			{ "git", "-C", repo, "switch", "-q", "-c", "feature" },
+			{ "git", "-C", repo, "add", "." },
+			{ "git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "second" },
+		}) do
+			vim.system(argv, { text = true }):wait()
+		end
+
+		local buf = vim.api.nvim_create_buf(false, false)
+		vim.api.nvim_buf_set_name(buf, file)
+		vim.api.nvim_set_current_buf(buf)
+
+		pi.add_line(1)
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iпервое<Esc>ZZ", true, false, true), "mx", false)
+		assert.is_nil(store.all()[1].diff)
+
+		pi.set_diff_base("main...HEAD")
+		pi.add_line(1)
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iвторое<Esc>ZZ", true, false, true), "mx", false)
+		assert.truthy(store.all()[2].diff)
+
+		pi.set_diff_base("HEAD")
+		store.clear()
+		vim.fn.delete(repo, "rf")
+	end)
+
 	it("refuses adds from the read-only diff pane", function()
 		local scratch = vim.api.nvim_create_buf(false, true)
 		vim.api.nvim_set_current_buf(scratch)
