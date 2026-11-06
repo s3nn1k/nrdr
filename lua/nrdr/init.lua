@@ -24,13 +24,23 @@ local function notify_warn(message)
 	vim.notify("nrdr: " .. message, vim.log.levels.WARN)
 end
 
+local diffview = require("nrdr.diffview")
+
 local file_backed_buftypes = { [""] = true, nowrite = true, acwrite = true }
 
 local function file_path()
 	if not file_backed_buftypes[vim.bo.buftype] then
 		return nil, "буфер не связан с файлом"
 	end
-	local path = vim.fs.normalize(vim.api.nvim_buf_get_name(0))
+	local name = vim.api.nvim_buf_get_name(0)
+	if name:find("^diffview://") then
+		local anchor = diffview.anchor_path()
+		if not anchor then
+			return nil, "не смог определить путь файла в дифф-панели diffview"
+		end
+		return vim.fs.normalize(anchor), nil
+	end
+	local path = vim.fs.normalize(name)
 	if path == "" then
 		return nil, "буфер не связан с файлом"
 	end
