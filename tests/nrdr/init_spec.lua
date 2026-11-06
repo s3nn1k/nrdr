@@ -369,12 +369,20 @@ describe("send deliver pipeline", function()
 
 		pi.add_line(1)
 		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iпервое<Esc>ZZ", true, false, true), "mx", false)
-		assert.is_nil(store.all()[1].diff)
+		local first = vim.iter(store.all()):find(function(remark)
+			return remark.comment == "первое"
+		end)
+		assert.truthy(first)
+		assert.is_nil(first.diff)
 
 		pi.set_diff_base("main...HEAD")
 		pi.add_line(1)
 		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iвторое<Esc>ZZ", true, false, true), "mx", false)
-		assert.truthy(store.all()[2].diff)
+		local second = vim.iter(store.all()):find(function(remark)
+			return remark.comment == "второе"
+		end)
+		assert.truthy(second)
+		assert.truthy(second.diff)
 
 		pi.set_diff_base("HEAD")
 		store.clear()
