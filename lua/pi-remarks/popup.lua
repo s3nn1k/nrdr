@@ -55,7 +55,7 @@ function M.open(opts)
 		end
 		finish(state, text)
 	end, { buffer = bufnr, desc = "pi-remarks: подтвердить комментарий" })
-	vim.keymap.set("n", "ZQ", function()
+	vim.keymap.set("n", "q", function()
 		finish(state, nil)
 	end, { buffer = bufnr, desc = "pi-remarks: отменить комментарий" })
 	vim.api.nvim_create_autocmd("BufWipeout", {
@@ -76,9 +76,10 @@ function M.open(opts)
 		row = math.floor((vim.o.lines - height) / 2),
 		col = math.floor((vim.o.columns - width) / 2),
 		border = "rounded",
-		title = " замечание ",
+		title = " comment ",
 		title_pos = "center",
 	})
+	vim.wo[state.win].winhighlight = "FloatTitle:NormalFloat"
 end
 
 return M

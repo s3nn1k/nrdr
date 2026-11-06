@@ -1,22 +1,21 @@
 # pi-remarks
 
-Neovim plugin: collect code-review remarks for a project and deliver them to a pi agent
+Neovim plugin: collect code-review remarks for a project and hand them to a pi agent
 through `herdr`.
 
-- `:PiRemarksAdd [range]` - stack a remark for the cursor line, an explicit range
-  (`:.,+2PiRemarksAdd`) or a visual selection; a floating popup takes the comment
-  (`ZZ` confirm, `ZQ` cancel).
-- `:PiRemarks` - stack buffer `pi-remarks://<root>`: `d` delete, `e` edit, `<CR>`
-  jump to file:line, `S` send unsent, `C` clear all.
-- `:PiRemarksSend` - send the unsent remarks as markdown to the herdr agent running in
-  the project (`cwd` match, otherwise pick from all agents); the agent's turn is then
-  awaited in the background.
-- Remarks persist per project root (`getcwd()` at add time) in
-  `stdpath("state")/pi-remarks/<sha256>.json`.
+- `<leader>pc` (n/v) - stack a remark for the cursor line (+ count) or the visual
+  selection; a floating popup takes the comment (`ZZ` confirm, `q` cancel).
+- `<leader>pb` - picker over the stored remarks: `<CR>` jump, `<C-d>` delete,
+  `<C-e>` edit, `<C-s>` send; telescope when available, otherwise `vim.ui.select`.
+- `<leader>ps` - send all remarks as markdown to an agent picked from `herdr agent
+  list` (project `cwd` first); the agent's turn is awaited in the background.
+- Remarks live in `stdpath("state")/pi-remarks/<sha256>.json` and are removed right
+  after a successful send - the stack always holds the unsent remainder.
 
 ## Dependencies
 
 - `herdr` - agent transport (`agent list`, `agent prompt`, `agent wait`)
+- telescope.nvim - optional, pickers fall back to `vim.ui.select`
 - plenary.nvim - tests only
 
 ## Setup
@@ -28,10 +27,12 @@ through `herdr`.
 ```lua
 {
 	dir = vim.fn.expand("~/projects/personal/pi-remarks"),
+	dependencies = { "nvim-telescope/telescope.nvim" },
 	init = function()
-		vim.keymap.set({ "n", "v" }, "<leader>ma", ":PiRemarksAdd<CR>", { desc = "pi-remarks: add remark" })
-		vim.keymap.set("n", "<leader>ml", ":PiRemarks<CR>", { desc = "pi-remarks: list" })
-		vim.keymap.set("n", "<leader>ms", ":PiRemarksSend<CR>", { desc = "pi-remarks: send" })
+		vim.keymap.set("n", "<leader>pc", function() require("pi-remarks").add_line(vim.v.count) end, { desc = "pi-remarks: add remark" })
+		vim.keymap.set("v", "<leader>pc", function() require("pi-remarks").add_range(vim.fn.line("'<"), vim.fn.line("'>")) end, { desc = "pi-remarks: add remark" })
+		vim.keymap.set("n", "<leader>pb", function() require("pi-remarks").pick() end, { desc = "pi-remarks: browse remarks" })
+		vim.keymap.set("n", "<leader>ps", function() require("pi-remarks").send() end, { desc = "pi-remarks: send remarks" })
 	end,
 }
 ```

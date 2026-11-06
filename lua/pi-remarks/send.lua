@@ -52,27 +52,6 @@ function M.list_agents(herdr_bin)
 	return M.parse_agents(done.stdout or "")
 end
 
-function M.select_agent(agents, root, on_selected)
-	for _, agent in ipairs(agents) do
-		if agent.pane_id and vim.fs.normalize(agent.cwd or "") == root then
-			on_selected(agent.pane_id)
-			return
-		end
-	end
-	vim.ui.select(agents, {
-		prompt = "агент с cwd проекта не найден, выберите получателя",
-		format_item = function(agent)
-			return ("%s (%s)"):format(agent.cwd or "?", agent.agent_status or "?")
-		end,
-	}, function(_, index)
-		if not index then
-			on_selected(nil)
-			return
-		end
-		on_selected(agents[index].pane_id)
-	end)
-end
-
 local function run_async(argv, on_done)
 	local label = "herdr agent " .. tostring(argv[3])
 	local ok, handle_or_err = pcall(vim.system, argv, { text = true }, function(done)

@@ -1,4 +1,4 @@
-local list = require("pi-remarks.list")
+local picker = require("pi-remarks.picker")
 local popup = require("pi-remarks.popup")
 local send = require("pi-remarks.send")
 local store = require("pi-remarks.store")
@@ -40,13 +40,7 @@ function M.setup(opts)
 	config = vim.tbl_deep_extend("force", defaults, opts or {})
 end
 
-function M.add(line_start, line_end)
-	local path, target_error = file_path()
-	if target_error then
-		notify_error(target_error)
-		return
-	end
-	local root = current_root()
+local function open_comment_popup(root, path, line_start, line_end)
 	popup.open({
 		on_confirm = function(comment)
 			if not comment then
@@ -59,15 +53,35 @@ function M.add(line_start, line_end)
 				line_start = math.min(line_start, line_end),
 				line_end = math.max(line_start, line_end),
 				comment = comment,
-				sent = false,
 			})
 			store.save(root, remarks)
 		end,
 	})
 end
 
-function M.open_list()
-	list.open(current_root())
+function M.add_line(count)
+	local path, target_error = file_path()
+	if target_error then
+		notify_error(target_error)
+		return
+	end
+	local root = current_root()
+	local line_start = vim.api.nvim_win_get_cursor(0)[1]
+	local line_end = line_start + math.max(count, 1) - 1
+	open_comment_popup(root, path, line_start, line_end)
+end
+
+function M.add_range(line_start, line_end)
+	local path, target_error = file_path()
+	if target_error then
+		notify_error(target_error)
+		return
+	end
+	open_comment_popup(current_root(), path, line_start, line_end)
+end
+
+function M.pick()
+	picker.remarks(current_root())
 end
 
 local function remark_key(remark)
@@ -103,7 +117,11 @@ local function deliver(root, remarks_to_send)
 		notify_error("агенты herdr не найдены")
 		return
 	end
-	send.select_agent(agents, root, function(pane_id)
+	local sent_keys = {}
+	for _, remark in ipairs(remarks_to_send) do
+		sent_keys[remark_key(remark)] = true
+	end
+	picker.agent(agents, root, function(pane_id)
 		if not pane_id then
 			return
 		end
@@ -112,45 +130,32 @@ local function deliver(root, remarks_to_send)
 				notify_error(prompt_error)
 				return
 			end
-			local sent_keys = {}
-			for _, remark in ipairs(remarks_to_send) do
-				sent_keys[remark_key(remark)] = true
-			end
 			local remarks = store.load(root)
+			local kept = {}
 			for _, remark in ipairs(remarks) do
-				if sent_keys[remark_key(remark)] then
-					remark.sent = true
+				if not sent_keys[remark_key(remark)] then
+					kept[#kept + 1] = remark
 				end
 			end
-			store.save(root, remarks)
-			list.refresh(root)
+			store.save(root, kept)
 			vim.notify(("pi-remarks: отправлено (pane %s)"):format(pane_id), vim.log.levels.INFO)
 			start_wait(config.herdr_bin, pane_id, config.wait_timeout_ms)
 		end)
 	end)
 end
 
-function M.send_unsent(root)
-	local unsent = vim.tbl_filter(function(remark)
-		return not remark.sent
-	end, store.load(root))
-	if #unsent == 0 then
-		notify_error("неотправленных замечаний нет")
+function M.send(root)
+	local target_root = root or current_root()
+	local remarks = store.load(target_root)
+	if #remarks == 0 then
+		notify_error("замечаний нет")
 		return
 	end
-	deliver(root, unsent)
+	deliver(target_root, remarks)
 end
 
-vim.api.nvim_create_user_command("PiRemarksAdd", function(command)
-	M.add(command.line1, command.line2)
-end, { range = true })
-
 vim.api.nvim_create_user_command("PiRemarks", function()
-	M.open_list()
-end, {})
-
-vim.api.nvim_create_user_command("PiRemarksSend", function()
-	M.send_unsent(current_root())
+	M.pick()
 end, {})
 
 vim.api.nvim_create_autocmd("VimLeavePre", {

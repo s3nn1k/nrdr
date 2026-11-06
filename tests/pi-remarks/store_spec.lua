@@ -20,7 +20,7 @@ describe("store", function()
 		vim.fn.delete(other_root, "rf")
 	end)
 
-	it("round-trips remarks through disk", function()
+	it("round-trips remarks through disk without a sent field", function()
 		local remarks = {
 			{
 				path = root .. "/src/a.lua",
@@ -28,7 +28,6 @@ describe("store", function()
 				line_start = 3,
 				line_end = 7,
 				comment = "первая строка\nвторая строка",
-				sent = false,
 			},
 			{
 				path = root .. "/b.go",
@@ -36,11 +35,12 @@ describe("store", function()
 				line_start = 1,
 				line_end = 1,
 				comment = "одиночный",
-				sent = true,
 			},
 		}
 		store.save(root, remarks)
-		assert.same(remarks, store.load(root))
+		local loaded = store.load(root)
+		assert.same(remarks, loaded)
+		assert.is_nil(loaded[1].sent)
 		assert.same("", vim.fn.glob(store.state_path(root) .. ".*.tmp"))
 	end)
 
