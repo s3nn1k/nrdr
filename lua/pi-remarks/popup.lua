@@ -1,8 +1,5 @@
 local M = {}
 
-local max_width = 80
-local max_height = 10
-
 local active = nil
 
 local function read_text(bufnr)
@@ -67,8 +64,8 @@ function M.open(opts)
 			end
 		end,
 	})
-	local width = math.min(max_width, vim.o.columns - 4)
-	local height = math.min(max_height, vim.o.lines - 4)
+	local width = math.max(24, math.floor(vim.o.columns * 0.4))
+	local height = math.max(6, math.floor(vim.o.lines * 0.6))
 	state.win = vim.api.nvim_open_win(bufnr, true, {
 		relative = "editor",
 		width = width,
