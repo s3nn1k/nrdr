@@ -1,4 +1,5 @@
 local block = require("pi-remarks.block")
+local util = require("pi-remarks.util")
 
 local M = {}
 
@@ -15,21 +16,11 @@ function M.build_message(remarks)
 	return table.concat(blocks, "\n\n")
 end
 
-local max_error_snippet = 120
-
-local function snippet(text)
-	local fragment = vim.trim(text or "")
-	if #fragment > max_error_snippet then
-		return fragment:sub(1, max_error_snippet - 1) .. "…"
-	end
-	return fragment
-end
-
 function M.parse_agents(json_text)
 	local ok, decoded = pcall(vim.json.decode, json_text)
 	local agents = ok and type(decoded) == "table" and type(decoded.result) == "table" and decoded.result.agents
 	if type(agents) ~= "table" then
-		local detail = snippet(ok and json_text or (tostring(decoded) .. ": " .. (json_text or "")))
+		local detail = util.snippet(ok and json_text or (tostring(decoded) .. ": " .. (json_text or "")))
 		return nil, "неожиданный формат ответа herdr agent list: " .. detail
 	end
 	return agents, nil

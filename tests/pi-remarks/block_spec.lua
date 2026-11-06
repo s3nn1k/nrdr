@@ -42,4 +42,16 @@ describe("remark_block", function()
 			block.remark_block(entry)
 		)
 	end)
+
+	it("skips leading and inner empty comment lines", function()
+		local entry = remark({ line_start = 3, line_end = 3, comment = "\n\nпервая\n\nвторая\n\n" })
+		assert.same(
+			table.concat({
+				"файл: /abs/src/pay.go:3",
+				"комментарий: первая",
+				"  вторая",
+			}, "\n"),
+			block.remark_block(entry)
+		)
+	end)
 end)

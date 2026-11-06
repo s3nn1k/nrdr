@@ -8,13 +8,6 @@ local function telescope_available()
 	return pcall(require, "telescope.pickers")
 end
 
-local function remark_line(remark)
-	if remark.line_start == remark.line_end then
-		return tostring(remark.line_start)
-	end
-	return remark.line_start .. "-" .. remark.line_end
-end
-
 function M.remark_entry(remark)
 	return remark.relpath .. ":" .. block.line_span(remark)
 end

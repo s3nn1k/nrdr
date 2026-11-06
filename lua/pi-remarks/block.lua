@@ -9,7 +9,12 @@ end
 
 function M.remark_block(remark)
 	local lines = { "файл: " .. remark.path .. ":" .. M.line_span(remark) }
-	local comment_lines = vim.split(remark.comment, "\n")
+	local comment_lines = {}
+	for _, line in ipairs(vim.split(remark.comment, "\n")) do
+		if line ~= "" then
+			comment_lines[#comment_lines + 1] = line
+		end
+	end
 	lines[#lines + 1] = "комментарий: " .. comment_lines[1]
 	for index = 2, #comment_lines do
 		lines[#lines + 1] = "  " .. comment_lines[index]

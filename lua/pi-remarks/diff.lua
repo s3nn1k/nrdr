@@ -1,14 +1,6 @@
+local util = require("pi-remarks.util")
+
 local M = {}
-
-local max_error_snippet = 120
-
-local function snippet(text)
-	local fragment = vim.trim(text or "")
-	if #fragment > max_error_snippet then
-		return fragment:sub(1, max_error_snippet - 1) .. "…"
-	end
-	return fragment
-end
 
 function M.parse_hunks(diff_text)
 	local hunks = {}
@@ -59,13 +51,13 @@ function M.snapshot(path, line_start, line_end, diff_base)
 	if git_path:sub(1, #dir + 1) == dir .. "/" then
 		git_path = git_path:sub(#dir + 2)
 	end
-	local done = vim.system({ "git", "-C", dir, "diff", "-U3", diff_base, "--", git_path }, { text = true }):wait()
+	local done = vim.system(
+		{ "git", "-C", dir, "diff", "-U3", diff_base, "--", ":(literal)" .. git_path },
+		{ text = true }
+	)
+		:wait()
 	local git_output = (done.stderr or "") .. "\n" .. (done.stdout or "")
-	if
-		done.code == 128
-		or git_output:find("not a git repository", 1, true)
-		or git_output:find("Could not access", 1, true)
-	then
+	if git_output:find("not a git repository", 1, true) or git_output:find("Could not access", 1, true) then
 		return nil
 	end
 	if done.code ~= 0 then
@@ -73,7 +65,7 @@ function M.snapshot(path, line_start, line_end, diff_base)
 			"pi-remarks: git diff завершился с ошибкой (code "
 				.. done.code
 				.. "): "
-				.. snippet(done.stderr),
+				.. util.snippet(done.stderr),
 			vim.log.levels.WARN
 		)
 		return nil

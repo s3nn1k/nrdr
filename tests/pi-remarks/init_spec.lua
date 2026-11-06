@@ -1,3 +1,4 @@
+local diff = require("pi-remarks.diff")
 local pi = require("pi-remarks")
 local store = require("pi-remarks.store")
 
@@ -6,6 +7,7 @@ describe("send deliver pipeline", function()
 	local pane
 	local pane_counter = 0
 	local original_system
+	local real_vim_system
 	local original_notify
 	local original_select
 	local spawns
@@ -62,6 +64,7 @@ describe("send deliver pipeline", function()
 	end
 
 	before_each(function()
+		real_vim_system = vim.system
 		cwd = vim.fs.normalize(vim.fn.getcwd())
 		pane_counter = pane_counter + 1
 		pane = "pane-" .. tostring(pane_counter)
@@ -301,6 +304,7 @@ describe("send deliver pipeline", function()
 	end)
 
 	it("stores the diff snapshot with add_line in a git repository", function()
+		vim.system = real_vim_system
 		local repo = vim.fs.normalize(vim.fn.tempname()) .. "-repo"
 		vim.fn.mkdir(repo, "p")
 		vim.system({ "git", "-C", repo, "init" }, { text = true }):wait()
@@ -315,7 +319,7 @@ describe("send deliver pipeline", function()
 			:wait()
 		vim.fn.writefile({ "line one edited", "line two", "line three" }, file)
 
-		local buf = vim.api.nvim_create_buf(false, true)
+		local buf = vim.api.nvim_create_buf(false, false)
 		vim.api.nvim_buf_set_name(buf, file)
 		vim.api.nvim_set_current_buf(buf)
 		vim.api.nvim_win_set_cursor(0, { 1, 0 })
@@ -325,9 +329,15 @@ describe("send deliver pipeline", function()
 		local remarks = store.all()
 		assert.same(1, #remarks)
 		assert.same("снапшот", remarks[1].comment)
+
+		local git_diff = vim.system({ "git", "-C", repo, "diff", "-U3", "HEAD", "--", "src/a.go" }, { text = true })
+			:wait()
+		local expected = diff.match_hunk(git_diff.stdout, 1, 1)
+		assert.truthy(expected, "git produced a diff")
 		assert.truthy(remarks[1].diff)
-		assert.truthy(remarks[1].diff.header:find("^@@ %-1,2 %+1,3 @@"))
-		assert.same({ "-line one", "+line one edited", "+line three" }, remarks[1].diff.body)
+		assert.same(expected.header, remarks[1].diff.header)
+		assert.same(expected.body, remarks[1].diff.body)
+		vim.system = original_system
 		vim.fn.delete(repo, "rf")
 	end)
 
