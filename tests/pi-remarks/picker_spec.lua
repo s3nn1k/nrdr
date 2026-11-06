@@ -109,7 +109,7 @@ describe("remarks picker", function()
 		}) do
 			saved[name] = package.loaded[name]
 		end
-		local captured = { mappings = {}, refreshes = 0 }
+		local captured = { mappings = {}, refreshes = 0, closes = 0 }
 		local prompt_bufnr = vim.api.nvim_create_buf(false, true)
 		package.loaded["telescope.finders"] = {
 			new_table = function(options)
@@ -144,7 +144,9 @@ describe("remarks picker", function()
 			end,
 		}
 		package.loaded["telescope.actions"] = {
-			close = function() end,
+			close = function()
+				captured.closes = captured.closes + 1
+			end,
 		}
 		package.loaded["telescope.config"] = {
 			values = {
@@ -158,6 +160,7 @@ describe("remarks picker", function()
 				return options
 			end,
 		}
+		captured.prompt_bufnr = prompt_bufnr
 		return captured,
 			function()
 				pcall(vim.api.nvim_buf_delete, prompt_bufnr, { force = true })
@@ -296,6 +299,25 @@ describe("remarks picker", function()
 
 		assert.same(vim.fs.normalize(file), vim.fs.normalize(vim.api.nvim_buf_get_name(0)))
 		assert.same(1, vim.api.nvim_win_get_cursor(0)[1])
+	end)
+
+	it("ignores actions on an empty selection without mutations", function()
+		store.save(root, { remark_one, remark_two })
+		local captured, restore = telescope_stub(nil)
+		picker.remarks(root)
+		local buf_before = vim.api.nvim_get_current_buf()
+		local wins_before = #vim.api.nvim_list_wins()
+
+		captured.mappings["n:<CR>"]()
+		captured.mappings["n:<C-d>"]()
+		captured.mappings["n:<C-e>"]()
+
+		assert.same(2, #store.load(root))
+		assert.same(0, captured.refreshes)
+		assert.same(0, captured.closes)
+		assert.same(buf_before, vim.api.nvim_get_current_buf())
+		assert.same(wins_before, #vim.api.nvim_list_wins())
+		restore()
 	end)
 
 	it("warns on an empty stack", function()

@@ -15,7 +15,7 @@ through `herdr`.
 ## Dependencies
 
 - `herdr` - agent transport (`agent list`, `agent prompt`, `agent wait`)
-- telescope.nvim - optional, pickers fall back to `vim.ui.select`
+- telescope.nvim - loaded by the spec; pickers fall back to `vim.ui.select` without it
 - plenary.nvim - tests only
 
 ## Setup

@@ -191,6 +191,25 @@ describe("send deliver pipeline", function()
 		assert.truthy(find_notification(vim.log.levels.ERROR, "замечаний нет"))
 	end)
 
+	it("does not touch the stack when the agent picker is cancelled", function()
+		store.save(root, { remark("a.lua", "первое") })
+		local prompts_before = #spawns_of("prompt")
+		local waits_before = #spawns_of("wait")
+		local original = vim.ui.select
+		vim.ui.select = function(_, _, on_choice)
+			on_choice(nil)
+		end
+
+		pi.send(root)
+
+		vim.ui.select = original
+
+		assert.same(1, #store.load(root))
+		assert.same("первое", store.load(root)[1].comment)
+		assert.same(prompts_before, #spawns_of("prompt"))
+		assert.same(waits_before, #spawns_of("wait"))
+	end)
+
 	it("always asks for the agent on every send", function()
 		store.save(root, { remark("a.lua", "первое") })
 

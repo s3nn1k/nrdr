@@ -118,11 +118,17 @@ local function telescope_remarks(root)
 				end
 				map({ "i", "n" }, "<CR>", function()
 					local entry = action_state.get_selected_entry()
+					if not entry then
+						return
+					end
 					actions.close(prompt_bufnr)
 					jump(entry.value.remark)
 				end)
 				map({ "i", "n" }, "<C-d>", function()
 					local entry = action_state.get_selected_entry()
+					if not entry then
+						return
+					end
 					local remarks = store.load(root)
 					table.remove(remarks, entry.value.index)
 					store.save(root, remarks)
@@ -130,6 +136,9 @@ local function telescope_remarks(root)
 				end)
 				map({ "i", "n" }, "<C-e>", function()
 					local entry = action_state.get_selected_entry()
+					if not entry then
+						return
+					end
 					popup.open({
 						initial = entry.value.remark.comment,
 						on_confirm = function(comment)
@@ -158,10 +167,9 @@ local function telescope_remarks(root)
 end
 
 local function select_remarks(root)
-	local remarks = store.load(root)
 	local items = {}
-	for index, remark in ipairs(remarks) do
-		items[index] = { index = index, remark = remark }
+	for index, remark in ipairs(store.load(root)) do
+		items[index] = { remark = remark }
 	end
 	vim.ui.select(items, {
 		prompt = "pi-remarks",
@@ -207,7 +215,7 @@ local function telescope_agent(agents, root, on_selected)
 		.new({}, {
 			prompt_title = "pi-remarks: агент",
 			finder = finders.new_table({
-				results = M.sort_agents(agents, root),
+				results = agents,
 				entry_maker = function(agent)
 					return {
 						value = agent,
