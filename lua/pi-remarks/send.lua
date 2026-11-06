@@ -90,11 +90,15 @@ function M.prompt(herdr_bin, pane_id, text, on_done)
 	return run_async({ herdr_bin, "agent", "prompt", pane_id, text }, on_done)
 end
 
-function M.wait_idle(herdr_bin, pane_id, timeout_ms, on_done)
-	return run_async(
-		{ herdr_bin, "agent", "wait", pane_id, "--until", "idle", "--timeout", tostring(timeout_ms) },
-		on_done
-	)
+function M.wait_for(opts, on_done)
+	local argv = { opts.herdr_bin, "agent", "wait", opts.pane_id }
+	for _, status in ipairs(opts.statuses) do
+		argv[#argv + 1] = "--until"
+		argv[#argv + 1] = status
+	end
+	argv[#argv + 1] = "--timeout"
+	argv[#argv + 1] = tostring(opts.timeout_ms)
+	return run_async(argv, on_done)
 end
 
 return M

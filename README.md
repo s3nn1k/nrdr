@@ -8,7 +8,7 @@ through `herdr`.
 - `<leader>pb` - picker over the stored remarks: `<CR>` jump, `<C-d>` delete,
   `<C-e>` edit, `<C-s>` send; telescope when available, otherwise `vim.ui.select`.
 - `<leader>ps` - send all remarks as markdown to an agent picked from `herdr agent
-  list` (project `cwd` first); the agent's turn is awaited in the background.
+  list` (project `cwd` first); the background wait covers the turn starting and finishing.
 - Remarks live in memory for the lifetime of the nvim session: the stack holds only the
   unsent remainder, sent remarks are removed right after a successful send.
 

@@ -55,6 +55,12 @@ describe("send deliver pipeline", function()
 		end, 20)
 	end
 
+	local function pump()
+		vim.wait(150, function()
+			return false
+		end, 10)
+	end
+
 	before_each(function()
 		cwd = vim.fs.normalize(vim.fn.getcwd())
 		pane_counter = pane_counter + 1
@@ -119,7 +125,7 @@ describe("send deliver pipeline", function()
 		store.clear()
 	end)
 
-	it("removes sent remarks and starts the waiter only after a successful prompt", function()
+	it("removes sent remarks and starts the working→idle wait chain after a successful prompt", function()
 		store.add(remark("a.lua", "первое"))
 		store.add(remark("b.go", "второе"))
 
@@ -136,25 +142,55 @@ describe("send deliver pipeline", function()
 		assert.same(0, #spawns_of("wait"))
 
 		prompt_exit(0)
+		pump()
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 
 		assert.same({}, store.all())
 		assert.same(1, #spawns_of("wait"))
 		assert.same(
-			{ "herdr", "agent", "wait", pane, "--until", "idle", "--timeout", "600000" },
+			{ "herdr", "agent", "wait", pane, "--until", "working", "--timeout", "15000" },
 			spawns_of("wait")[1].argv
 		)
 
 		wait_exit(0)
+		pump()
+
+		assert.same(2, #spawns_of("wait"))
+		assert.same(
+			{ "herdr", "agent", "wait", pane, "--until", "idle", "--timeout", "600000" },
+			spawns_of("wait")[2].argv
+		)
+
+		wait_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "агент завершил ход")
+		print(
+			"DBG T1-END spawns:",
+			vim.inspect(vim.tbl_map(function(s)
+				return table.concat(s.argv, " ")
+			end, spawns))
+		)
+		print("DBG T1-END active:", vim.inspect(active_waits_dbg and active_waits_dbg() or "n/a"))
 	end)
 
 	it("keeps remarks when the prompt fails", function()
+		print(
+			"DBG T2-START spawns:",
+			vim.inspect(vim.tbl_map(function(s)
+				return table.concat(s.argv, " ")
+			end, spawns))
+		)
 		store.add(remark("a.lua", "первое"))
 
 		pi.send()
 		prompt_exit(1)
 		wait_for_notification(vim.log.levels.ERROR, "завершился с ошибкой")
+		print(
+			"DBG spawns:",
+			vim.inspect(vim.tbl_map(function(s)
+				return table.concat(s.argv, " ")
+			end, spawns))
+		)
+		print("DBG notifications:", vim.inspect(notifications))
 
 		local remarks = store.all()
 		assert.same(1, #remarks)
@@ -171,11 +207,18 @@ describe("send deliver pipeline", function()
 		store.add(remark("b.go", "добавлено в полёте"))
 
 		prompt_exit(0)
+		prompt_exit(0)
+		pump()
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 
 		local remarks = store.all()
 		assert.same(1, #remarks)
 		assert.same("добавлено в полёте", remarks[1].comment)
+
+		wait_exit(0)
+		pump()
+		wait_exit(0)
+		wait_for_notification(vim.log.levels.INFO, "агент завершил ход")
 	end)
 
 	it("does not spawn another prompt when the stack is empty", function()
@@ -193,8 +236,10 @@ describe("send deliver pipeline", function()
 
 		pi.send()
 		prompt_exit(0)
+		pump()
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 		wait_exit(0)
+		pump()
 		wait_for_notification(vim.log.levels.INFO, "агент завершил ход")
 		assert.same(1, #select_calls)
 
@@ -204,11 +249,12 @@ describe("send deliver pipeline", function()
 		assert.same(2, #select_calls)
 	end)
 
-	it("does not spawn a second waiter for the same pane while one is alive", function()
+	it("does not spawn a second waiter while the chain is alive", function()
 		store.add(remark("a.lua", "первое"))
 
 		pi.send()
 		prompt_exit(0)
+		pump()
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 		assert.same(1, #spawns_of("wait"))
 
@@ -216,26 +262,56 @@ describe("send deliver pipeline", function()
 
 		pi.send()
 		prompt_exit(0)
-		vim.wait(500, function()
-			return find_notification(vim.log.levels.WARN, "уже ждём завершения хода агента")
-				~= nil
-		end, 20)
+		pump()
+		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 
-		assert.same({}, store.all())
 		assert.same(1, #spawns_of("wait"))
 		assert.truthy(
 			find_notification(vim.log.levels.WARN, "уже ждём завершения хода агента")
 		)
 
 		wait_exit(0)
+		pump()
+		wait_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "агент завершил ход")
 	end)
 
-	it("kills the active waiter on VimLeavePre", function()
+	it("warns and releases the slot when the turn never starts", function()
 		store.add(remark("a.lua", "первое"))
 
 		pi.send()
 		prompt_exit(0)
+		pump()
+		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
+		assert.same(
+			{ "herdr", "agent", "wait", pane, "--until", "working", "--timeout", "15000" },
+			spawns_of("wait")[1].argv
+		)
+
+		wait_exit(1)
+		pump()
+		wait_for_notification(vim.log.levels.WARN, "ход агента не начался за 15с")
+
+		assert.same(1, #spawns_of("wait"))
+		assert.is_nil(find_notification(vim.log.levels.INFO, "агент завершил ход"))
+
+		store.add(remark("b.go", "второе"))
+		pi.send()
+		prompt_exit(0)
+		pump()
+		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
+
+		assert.same(2, #spawns_of("wait"))
+		assert.same("--until", spawns_of("wait")[2].argv[5])
+		assert.same("working", spawns_of("wait")[2].argv[6])
+	end)
+
+	it("kills the active chain phase on VimLeavePre", function()
+		store.add(remark("a.lua", "первое"))
+
+		pi.send()
+		prompt_exit(0)
+		pump()
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 		assert.same(1, #spawns_of("wait"))
 

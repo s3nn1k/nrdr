@@ -8,6 +8,7 @@ local M = {}
 local defaults = {
 	herdr_bin = "herdr",
 	wait_timeout_ms = 600000,
+	turn_start_timeout_ms = 15000,
 }
 
 local config = vim.deepcopy(defaults)
@@ -87,16 +88,40 @@ local function start_wait(herdr_bin, pane_id, timeout_ms)
 		notify_warn("уже ждём завершения хода агента (pane " .. pane_id .. ")")
 		return
 	end
-	local handle = send.wait_idle(herdr_bin, pane_id, timeout_ms, function(wait_error)
-		active_waits[pane_id] = nil
-		if wait_error then
-			notify_warn(wait_error)
+	local start_handle = send.wait_for({
+		herdr_bin = herdr_bin,
+		pane_id = pane_id,
+		statuses = { "working" },
+		timeout_ms = config.turn_start_timeout_ms,
+	}, function(start_error)
+		if start_error then
+			active_waits[pane_id] = nil
+			notify_warn(
+				("ход агента не начался за %dс — сообщение может остаться в очереди"):format(
+					math.floor(config.turn_start_timeout_ms / 1000)
+				)
+			)
 			return
 		end
-		vim.notify("pi-remarks: агент завершил ход", vim.log.levels.INFO)
+		local idle_handle = send.wait_for({
+			herdr_bin = herdr_bin,
+			pane_id = pane_id,
+			statuses = { "idle" },
+			timeout_ms = timeout_ms,
+		}, function(wait_error)
+			active_waits[pane_id] = nil
+			if wait_error then
+				notify_warn(wait_error)
+				return
+			end
+			vim.notify("pi-remarks: агент завершил ход", vim.log.levels.INFO)
+		end)
+		if idle_handle then
+			active_waits[pane_id] = idle_handle
+		end
 	end)
-	if handle then
-		active_waits[pane_id] = handle
+	if start_handle then
+		active_waits[pane_id] = start_handle
 	end
 end
 
