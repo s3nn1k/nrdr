@@ -21,10 +21,6 @@ local function notify_warn(message)
 	vim.notify("pi-remarks: " .. message, vim.log.levels.WARN)
 end
 
-local function current_root()
-	return vim.fs.normalize(vim.fn.getcwd())
-end
-
 local function file_path()
 	if vim.bo.buftype ~= "" then
 		return nil, "буфер не связан с файлом"
@@ -40,21 +36,20 @@ function M.setup(opts)
 	config = vim.tbl_deep_extend("force", defaults, opts or {})
 end
 
-local function open_comment_popup(root, path, line_start, line_end)
+local function open_comment_popup(path, line_start, line_end)
 	popup.open({
 		on_confirm = function(comment)
 			if not comment then
 				return
 			end
-			local remarks = store.load(root)
-			table.insert(remarks, {
+			local cwd = vim.fs.normalize(vim.fn.getcwd())
+			store.add({
 				path = path,
-				relpath = vim.fs.relpath(root, path) or path,
+				relpath = vim.fs.relpath(cwd, path) or path,
 				line_start = math.min(line_start, line_end),
 				line_end = math.max(line_start, line_end),
 				comment = comment,
 			})
-			store.save(root, remarks)
 		end,
 	})
 end
@@ -65,10 +60,9 @@ function M.add_line(count)
 		notify_error(target_error)
 		return
 	end
-	local root = current_root()
 	local line_start = vim.api.nvim_win_get_cursor(0)[1]
 	local line_end = line_start + math.max(count, 1) - 1
-	open_comment_popup(root, path, line_start, line_end)
+	open_comment_popup(path, line_start, line_end)
 end
 
 function M.add_range(line_start, line_end)
@@ -77,11 +71,11 @@ function M.add_range(line_start, line_end)
 		notify_error(target_error)
 		return
 	end
-	open_comment_popup(current_root(), path, line_start, line_end)
+	open_comment_popup(path, line_start, line_end)
 end
 
 function M.pick()
-	picker.remarks(current_root())
+	picker.remarks()
 end
 
 local function remark_key(remark)
@@ -106,7 +100,7 @@ local function start_wait(herdr_bin, pane_id, timeout_ms)
 	end
 end
 
-local function deliver(root, remarks_to_send)
+local function deliver(remarks_to_send)
 	local message = send.build_message(remarks_to_send)
 	local agents, list_error = send.list_agents(config.herdr_bin)
 	if list_error then
@@ -121,7 +115,7 @@ local function deliver(root, remarks_to_send)
 	for _, remark in ipairs(remarks_to_send) do
 		sent_keys[remark_key(remark)] = true
 	end
-	picker.agent(agents, root, function(pane_id)
+	picker.agent(agents, vim.fs.normalize(vim.fn.getcwd()), function(pane_id)
 		if not pane_id then
 			return
 		end
@@ -130,28 +124,22 @@ local function deliver(root, remarks_to_send)
 				notify_error(prompt_error)
 				return
 			end
-			local remarks = store.load(root)
-			local kept = {}
-			for _, remark in ipairs(remarks) do
-				if not sent_keys[remark_key(remark)] then
-					kept[#kept + 1] = remark
-				end
-			end
-			store.save(root, kept)
+			store.keep(function(remark)
+				return not sent_keys[remark_key(remark)]
+			end)
 			vim.notify(("pi-remarks: отправлено (pane %s)"):format(pane_id), vim.log.levels.INFO)
 			start_wait(config.herdr_bin, pane_id, config.wait_timeout_ms)
 		end)
 	end)
 end
 
-function M.send(root)
-	local target_root = root or current_root()
-	local remarks = store.load(target_root)
+function M.send()
+	local remarks = store.all()
 	if #remarks == 0 then
 		notify_error("замечаний нет")
 		return
 	end
-	deliver(target_root, remarks)
+	deliver(remarks)
 end
 
 vim.api.nvim_create_user_command("PiRemarks", function()

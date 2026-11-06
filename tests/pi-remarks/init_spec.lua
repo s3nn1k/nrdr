@@ -2,8 +2,9 @@ local pi = require("pi-remarks")
 local store = require("pi-remarks.store")
 
 describe("send deliver pipeline", function()
-	local root
+	local cwd
 	local pane
+	local pane_counter = 0
 	local original_system
 	local original_notify
 	local original_select
@@ -15,7 +16,7 @@ describe("send deliver pipeline", function()
 
 	local function remark(name, comment)
 		return {
-			path = root .. "/" .. name,
+			path = "/tmp/proj/" .. name,
 			relpath = name,
 			line_start = 1,
 			line_end = 1,
@@ -55,8 +56,9 @@ describe("send deliver pipeline", function()
 	end
 
 	before_each(function()
-		root = vim.fs.normalize(vim.fn.tempname())
-		pane = "pane-" .. vim.fn.sha256(root):sub(1, 8)
+		cwd = vim.fs.normalize(vim.fn.getcwd())
+		pane_counter = pane_counter + 1
+		pane = "pane-" .. tostring(pane_counter)
 		spawns = {}
 		notifications = {}
 		select_calls = {}
@@ -78,7 +80,7 @@ describe("send deliver pipeline", function()
 							stdout = vim.json.encode({
 								result = {
 									agents = {
-										{ pane_id = pane, agent_status = "idle", cwd = root },
+										{ pane_id = pane, agent_status = "idle", cwd = cwd },
 										{ pane_id = "p-other", agent_status = "working", cwd = "/elsewhere" },
 									},
 								},
@@ -114,14 +116,14 @@ describe("send deliver pipeline", function()
 		if had_telescope then
 			vim.opt.runtimepath:append(telescope_path)
 		end
-		vim.fn.delete(store.state_path(root))
-		vim.fn.delete(root, "rf")
+		store.clear()
 	end)
 
 	it("removes sent remarks and starts the waiter only after a successful prompt", function()
-		store.save(root, { remark("a.lua", "первое"), remark("b.go", "второе") })
+		store.add(remark("a.lua", "первое"))
+		store.add(remark("b.go", "второе"))
 
-		pi.send(root)
+		pi.send()
 
 		assert.same(1, #select_calls)
 		assert.same(
@@ -130,13 +132,13 @@ describe("send deliver pipeline", function()
 				return agent.pane_id
 			end, select_calls[1].items)
 		)
-		assert.is_same(2, #store.load(root))
+		assert.same(2, #store.all())
 		assert.same(0, #spawns_of("wait"))
 
 		prompt_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 
-		assert.same({}, store.load(root))
+		assert.same({}, store.all())
 		assert.same(1, #spawns_of("wait"))
 		assert.same(
 			{ "herdr", "agent", "wait", pane, "--until", "idle", "--timeout", "600000" },
@@ -148,102 +150,78 @@ describe("send deliver pipeline", function()
 	end)
 
 	it("keeps remarks when the prompt fails", function()
-		store.save(root, { remark("a.lua", "первое") })
+		store.add(remark("a.lua", "первое"))
 
-		pi.send(root)
+		pi.send()
 		prompt_exit(1)
 		wait_for_notification(vim.log.levels.ERROR, "завершился с ошибкой")
 
-		local remarks = store.load(root)
+		local remarks = store.all()
 		assert.same(1, #remarks)
 		assert.same("первое", remarks[1].comment)
-		assert.is_nil(remarks[1].sent)
 		assert.same(0, #spawns_of("wait"))
 		assert.truthy(find_notification(vim.log.levels.ERROR, "boom"))
 	end)
 
 	it("preserves remarks added while the prompt is in flight and removes sent ones", function()
-		store.save(root, { remark("a.lua", "первое") })
+		store.add(remark("a.lua", "первое"))
 
-		pi.send(root)
+		pi.send()
 
-		local fresh = store.load(root)
-		table.insert(fresh, remark("b.go", "добавлено в полёте"))
-		store.save(root, fresh)
+		store.add(remark("b.go", "добавлено в полёте"))
 
 		prompt_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 
-		local remarks = store.load(root)
+		local remarks = store.all()
 		assert.same(1, #remarks)
 		assert.same("добавлено в полёте", remarks[1].comment)
-		assert.is_nil(remarks[1].sent)
 	end)
 
 	it("does not spawn another prompt when the stack is empty", function()
-		store.save(root, {})
 		local prompts_before = #spawns_of("prompt")
 
-		pi.send(root)
+		pi.send()
 
 		assert.same(prompts_before, #spawns_of("prompt"))
 		assert.same(0, #select_calls)
 		assert.truthy(find_notification(vim.log.levels.ERROR, "замечаний нет"))
 	end)
 
-	it("does not touch the stack when the agent picker is cancelled", function()
-		store.save(root, { remark("a.lua", "первое") })
-		local prompts_before = #spawns_of("prompt")
-		local waits_before = #spawns_of("wait")
-		local original = vim.ui.select
-		vim.ui.select = function(_, _, on_choice)
-			on_choice(nil)
-		end
-
-		pi.send(root)
-
-		vim.ui.select = original
-
-		assert.same(1, #store.load(root))
-		assert.same("первое", store.load(root)[1].comment)
-		assert.same(prompts_before, #spawns_of("prompt"))
-		assert.same(waits_before, #spawns_of("wait"))
-	end)
-
 	it("always asks for the agent on every send", function()
-		store.save(root, { remark("a.lua", "первое") })
+		store.add(remark("a.lua", "первое"))
 
-		pi.send(root)
+		pi.send()
 		prompt_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 		wait_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "агент завершил ход")
 		assert.same(1, #select_calls)
 
-		store.save(root, { remark("b.go", "второе") })
-		pi.send(root)
+		store.add(remark("b.go", "второе"))
+		pi.send()
 
 		assert.same(2, #select_calls)
 	end)
 
 	it("does not spawn a second waiter for the same pane while one is alive", function()
-		store.save(root, { remark("a.lua", "первое") })
+		store.add(remark("a.lua", "первое"))
 
-		pi.send(root)
+		pi.send()
 		prompt_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 		assert.same(1, #spawns_of("wait"))
 
-		store.save(root, { remark("b.go", "второе") })
+		store.add(remark("b.go", "второе"))
 
-		pi.send(root)
+		pi.send()
 		prompt_exit(0)
 		vim.wait(500, function()
 			return find_notification(vim.log.levels.WARN, "уже ждём завершения хода агента")
 				~= nil
 		end, 20)
 
-		assert.same({}, store.load(root))
+		assert.same({}, store.all())
 		assert.same(1, #spawns_of("wait"))
 		assert.truthy(
 			find_notification(vim.log.levels.WARN, "уже ждём завершения хода агента")
@@ -254,9 +232,9 @@ describe("send deliver pipeline", function()
 	end)
 
 	it("kills the active waiter on VimLeavePre", function()
-		store.save(root, { remark("a.lua", "первое") })
+		store.add(remark("a.lua", "первое"))
 
-		pi.send(root)
+		pi.send()
 		prompt_exit(0)
 		wait_for_notification(vim.log.levels.INFO, "отправлено (pane " .. pane .. ")")
 		assert.same(1, #spawns_of("wait"))
@@ -265,5 +243,24 @@ describe("send deliver pipeline", function()
 
 		assert.is_true(spawns_of("wait")[1].killed)
 		assert.same("term", spawns_of("wait")[1].kill_signal)
+	end)
+
+	it("does not touch the stack when the agent picker is cancelled", function()
+		store.add(remark("a.lua", "первое"))
+		local prompts_before = #spawns_of("prompt")
+		local waits_before = #spawns_of("wait")
+		local original = vim.ui.select
+		vim.ui.select = function(_, _, on_choice)
+			on_choice(nil)
+		end
+
+		pi.send()
+
+		vim.ui.select = original
+
+		assert.same(1, #store.all())
+		assert.same("первое", store.all()[1].comment)
+		assert.same(prompts_before, #spawns_of("prompt"))
+		assert.same(waits_before, #spawns_of("wait"))
 	end)
 end)

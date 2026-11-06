@@ -59,23 +59,24 @@ local function jump(remark)
 	local wins = file_bufnr > 0 and vim.fn.win_findbuf(file_bufnr) or {}
 	if wins[1] then
 		vim.api.nvim_set_current_win(wins[1])
+		vim.api.nvim_win_set_cursor(wins[1], { remark.line_start, 0 })
 	else
-		vim.cmd.split(vim.fn.fnameescape(remark.path))
+		vim.cmd.edit(vim.fn.fnameescape(remark.path))
+		vim.api.nvim_win_set_cursor(0, { remark.line_start, 0 })
 	end
-	vim.api.nvim_win_set_cursor(0, { remark.line_start, 0 })
 end
 
-local function remark_results(root)
+local function remark_results()
 	local results = {}
-	for index, remark in ipairs(store.load(root)) do
+	for index, remark in ipairs(store.all()) do
 		results[index] = { index = index, remark = remark }
 	end
 	return results
 end
 
-local function remark_finder(finder, root)
+local function remark_finder(finder)
 	return finder.new_table({
-		results = remark_results(root),
+		results = remark_results(),
 		entry_maker = function(entry)
 			return {
 				value = entry,
@@ -97,7 +98,7 @@ local function remark_previewer(previewers)
 	})
 end
 
-local function telescope_remarks(root)
+local function telescope_remarks()
 	local pickers = require("telescope.pickers")
 	local finders = require("telescope.finders")
 	local actions = require("telescope.actions")
@@ -108,13 +109,13 @@ local function telescope_remarks(root)
 	pickers
 		.new({}, {
 			prompt_title = "pi-remarks",
-			finder = remark_finder(finders, root),
+			finder = remark_finder(finders),
 			sorter = conf.generic_sorter({}),
 			previewer = remark_previewer(previewers),
 			attach_mappings = function(prompt_bufnr, map)
 				local refresh = function()
 					local current_picker = action_state.get_current_picker(prompt_bufnr)
-					current_picker:refresh(remark_finder(finders, root), { reset_prompt = true })
+					current_picker:refresh(remark_finder(finders), { reset_prompt = true })
 				end
 				map({ "i", "n" }, "<CR>", function()
 					local entry = action_state.get_selected_entry()
@@ -129,9 +130,7 @@ local function telescope_remarks(root)
 					if not entry then
 						return
 					end
-					local remarks = store.load(root)
-					table.remove(remarks, entry.value.index)
-					store.save(root, remarks)
+					store.remove_index(entry.value.index)
 					refresh()
 				end)
 				map({ "i", "n" }, "<C-e>", function()
@@ -145,20 +144,36 @@ local function telescope_remarks(root)
 							if not comment then
 								return
 							end
-							local remarks = store.load(root)
-							local current = remarks[entry.value.index]
+							local current = store.all()[entry.value.index]
 							if not current then
 								return
 							end
 							current.comment = comment
-							store.save(root, remarks)
 							refresh()
 						end,
 					})
 				end)
+				map({ "i", "n" }, "<C-x>", function()
+					local remarks = store.all()
+					if #remarks == 0 then
+						return
+					end
+					vim.ui.select({ false, true }, {
+						prompt = ("очистить все замечания (%d)?"):format(#remarks),
+						format_item = function(choice)
+							return choice and "да" or "нет"
+						end,
+					}, function(confirmed)
+						if not confirmed then
+							return
+						end
+						store.clear()
+						actions.close(prompt_bufnr)
+					end)
+				end)
 				map({ "i", "n" }, "<C-s>", function()
 					actions.close(prompt_bufnr)
-					require("pi-remarks").send(root)
+					require("pi-remarks").send()
 				end)
 				return true
 			end,
@@ -166,9 +181,9 @@ local function telescope_remarks(root)
 		:find()
 end
 
-local function select_remarks(root)
+local function select_remarks()
 	local items = {}
-	for index, remark in ipairs(store.load(root)) do
+	for index, remark in ipairs(store.all()) do
 		items[index] = { remark = remark }
 	end
 	vim.ui.select(items, {
@@ -183,15 +198,15 @@ local function select_remarks(root)
 	end)
 end
 
-function M.remarks(root)
-	if #store.load(root) == 0 then
+function M.remarks()
+	if #store.all() == 0 then
 		vim.notify("pi-remarks: замечаний нет", vim.log.levels.WARN)
 		return
 	end
 	if telescope_available() then
-		telescope_remarks(root)
+		telescope_remarks()
 	else
-		select_remarks(root)
+		select_remarks()
 	end
 end
 

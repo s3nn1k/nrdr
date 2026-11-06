@@ -72,7 +72,7 @@ describe("sort_agents", function()
 	local other_one = { pane_id = "p-other-1", cwd = "/elsewhere" }
 	local other_two = { pane_id = "p-other-2", cwd = "/elsewhere-two" }
 
-	it("puts agents matching the project root first and keeps the rest in order", function()
+	it("puts agents matching the cwd first and keeps the rest in order", function()
 		local sorted = picker.sort_agents({ other_one, match, other_two }, "/tmp/proj")
 		assert.same({ match, other_one, other_two }, sorted)
 	end)
@@ -84,7 +84,6 @@ describe("sort_agents", function()
 end)
 
 describe("remarks picker", function()
-	local root
 	local original_notify
 	local notifications
 	local original_select
@@ -92,10 +91,7 @@ describe("remarks picker", function()
 	local remark_one
 	local remark_two
 	local restore_telescope
-
-	local function open_file(path)
-		vim.cmd("edit " .. vim.fn.fnameescape(path))
-	end
+	local tmp_file
 
 	local function telescope_stub(selected_entry)
 		local saved = {}
@@ -111,6 +107,7 @@ describe("remarks picker", function()
 		end
 		local captured = { mappings = {}, refreshes = 0, closes = 0 }
 		local prompt_bufnr = vim.api.nvim_create_buf(false, true)
+		captured.prompt_bufnr = prompt_bufnr
 		package.loaded["telescope.finders"] = {
 			new_table = function(options)
 				captured.last_finder = options
@@ -160,7 +157,6 @@ describe("remarks picker", function()
 				return options
 			end,
 		}
-		captured.prompt_bufnr = prompt_bufnr
 		return captured,
 			function()
 				pcall(vim.api.nvim_buf_delete, prompt_bufnr, { force = true })
@@ -171,23 +167,22 @@ describe("remarks picker", function()
 	end
 
 	before_each(function()
-		root = vim.fs.normalize(vim.fn.tempname())
-		vim.fn.mkdir(root, "p")
 		remark_one = {
-			path = root .. "/a.lua",
+			path = "/tmp/proj/a.lua",
 			relpath = "a.lua",
 			line_start = 1,
 			line_end = 1,
 			comment = "первое\nрасшифровка",
 		}
 		remark_two = {
-			path = root .. "/b.go",
+			path = "/tmp/proj/b.go",
 			relpath = "b.go",
 			line_start = 4,
 			line_end = 9,
 			comment = "второе",
 		}
-		store.save(root, { remark_one, remark_two })
+		store.add(remark_one)
+		store.add(remark_two)
 		original_notify = vim.notify
 		notifications = {}
 		vim.notify = function(message, level)
@@ -207,14 +202,20 @@ describe("remarks picker", function()
 		end
 		vim.notify = original_notify
 		vim.ui.select = original_select
-		vim.fn.delete(store.state_path(root))
-		vim.fn.delete(root, "rf")
+		store.clear()
+		if tmp_file then
+			if vim.fn.bufnr(tmp_file) > 0 then
+				pcall(vim.api.nvim_buf_delete, vim.fn.bufnr(tmp_file), { force = true })
+			end
+			vim.fn.delete(tmp_file)
+			tmp_file = nil
+		end
 	end)
 
 	it("opens telescope with entries and deletes through <C-d> with refresh", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
 		restore_telescope = restore
-		picker.remarks(root)
+		picker.remarks()
 
 		local results = captured.last_finder.results
 		assert.same(2, #results)
@@ -225,36 +226,35 @@ describe("remarks picker", function()
 		assert.truthy(captured.mappings["n:<CR>"])
 		assert.truthy(captured.mappings["i:<C-d>"])
 		assert.truthy(captured.mappings["i:<C-e>"])
+		assert.truthy(captured.mappings["i:<C-x>"])
 		assert.truthy(captured.mappings["i:<C-s>"])
 
 		captured.mappings["n:<C-d>"]()
 
-		local remarks = store.load(root)
+		local remarks = store.all()
 		assert.same(1, #remarks)
 		assert.same("b.go", remarks[1].relpath)
 		assert.same(1, captured.refreshes)
 		assert.same(1, #captured.last_finder.results)
 		assert.same("b.go:4-9", captured.last_finder.entry_maker(captured.last_finder.results[1]).display())
-		restore()
 	end)
 
 	it("edits the comment through <C-e> and the popup", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
 		restore_telescope = restore
-		picker.remarks(root)
+		picker.remarks()
 
 		captured.mappings["n:<C-e>"]()
 		assert.same({ "первое", "расшифровка" }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
 		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "исправлено" })
 		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("ZZ", true, false, true), "mx", false)
 
-		local remarks = store.load(root)
+		local remarks = store.all()
 		assert.same("исправлено", remarks[1].comment)
 		assert.same(1, captured.refreshes)
-		restore()
 	end)
 
-	it("sends unsent remarks through <C-s> by asking for an agent", function()
+	it("sends remarks through <C-s> by asking for an agent", function()
 		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
 		restore_telescope = restore
 		local original_system = vim.system
@@ -265,7 +265,7 @@ describe("remarks picker", function()
 						return {
 							code = 0,
 							stdout = vim.json.encode({
-								result = { agents = { { pane_id = "p1", agent_status = "idle", cwd = root } } },
+								result = { agents = { { pane_id = "p1", agent_status = "idle", cwd = "/tmp" } } },
 							}),
 							stderr = "",
 						}
@@ -274,7 +274,7 @@ describe("remarks picker", function()
 				end,
 			}
 		end
-		picker.remarks(root)
+		picker.remarks()
 
 		restore()
 		restore_telescope = disable_telescope()
@@ -285,26 +285,10 @@ describe("remarks picker", function()
 		vim.system = original_system
 	end)
 
-	it("jumps to the file on select fallback", function()
-		restore_telescope = disable_telescope()
-		local file = root .. "/a.lua"
-		vim.fn.writefile({ "line one", "line two" }, file)
-
-		picker.remarks(root)
-
-		assert.same(1, #select_calls)
-		assert.same(2, #select_calls[1].items)
-		assert.same("a.lua:1 первое", select_calls[1].opts.format_item(select_calls[1].items[1]))
-		select_calls[1].on_choice(select_calls[1].items[1])
-
-		assert.same(vim.fs.normalize(file), vim.fs.normalize(vim.api.nvim_buf_get_name(0)))
-		assert.same(1, vim.api.nvim_win_get_cursor(0)[1])
-	end)
-
 	it("ignores actions on an empty selection without mutations", function()
-		store.save(root, { remark_one, remark_two })
 		local captured, restore = telescope_stub(nil)
-		picker.remarks(root)
+		restore_telescope = restore
+		picker.remarks()
 		local buf_before = vim.api.nvim_get_current_buf()
 		local wins_before = #vim.api.nvim_list_wins()
 
@@ -312,17 +296,94 @@ describe("remarks picker", function()
 		captured.mappings["n:<C-d>"]()
 		captured.mappings["n:<C-e>"]()
 
-		assert.same(2, #store.load(root))
+		assert.same(2, #store.all())
 		assert.same(0, captured.refreshes)
 		assert.same(0, captured.closes)
 		assert.same(buf_before, vim.api.nvim_get_current_buf())
 		assert.same(wins_before, #vim.api.nvim_list_wins())
-		restore()
+	end)
+
+	it("clears the stack and closes the picker through <C-x> on confirm", function()
+		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
+		restore_telescope = restore
+		picker.remarks()
+
+		captured.mappings["n:<C-x>"]()
+
+		assert.same(1, #select_calls)
+		assert.same(2, #select_calls[1].items)
+		select_calls[1].on_choice(true)
+
+		assert.same({}, store.all())
+		assert.same(1, captured.closes)
+	end)
+
+	it("keeps the stack through <C-x> on decline", function()
+		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
+		restore_telescope = restore
+		picker.remarks()
+
+		captured.mappings["n:<C-x>"]()
+		select_calls[1].on_choice(false)
+
+		assert.same(2, #store.all())
+		assert.same(0, captured.closes)
+	end)
+
+	it("does not open confirm on an emptied picker through <C-x>", function()
+		store.clear()
+		store.add(remark_one)
+		local captured, restore = telescope_stub({ value = { index = 1, remark = remark_one } })
+		restore_telescope = restore
+		picker.remarks()
+
+		captured.mappings["n:<C-d>"]()
+		assert.same({}, store.all())
+
+		captured.mappings["n:<C-x>"]()
+
+		assert.same(0, #select_calls)
+	end)
+
+	it("jumps through :edit when the file buffer is not open", function()
+		restore_telescope = disable_telescope()
+		local file = "/tmp/pi-remarks-jump-target.lua"
+		vim.fn.writefile({ "line one", "line two" }, file)
+		tmp_file = file
+		store.clear()
+		store.add({ path = file, relpath = "jump-target.lua", line_start = 2, line_end = 2, comment = "c" })
+		local wins_before = #vim.api.nvim_list_wins()
+
+		picker.remarks()
+		select_calls[1].on_choice(select_calls[1].items[1])
+
+		assert.same(wins_before, #vim.api.nvim_list_wins())
+		assert.same(file, vim.api.nvim_buf_get_name(0))
+		assert.same(2, vim.api.nvim_win_get_cursor(0)[1])
+	end)
+
+	it("focuses the existing window when the file buffer is already open", function()
+		restore_telescope = disable_telescope()
+		local file = "/tmp/pi-remarks-jump-target.lua"
+		vim.fn.writefile({ "line one", "line two" }, file)
+		tmp_file = file
+		store.clear()
+		store.add({ path = file, relpath = "jump-target.lua", line_start = 2, line_end = 2, comment = "c" })
+		vim.cmd.edit(vim.fn.fnameescape(file))
+		local win_before = vim.api.nvim_get_current_win()
+		local wins_before = #vim.api.nvim_list_wins()
+
+		picker.remarks()
+		select_calls[1].on_choice(select_calls[1].items[1])
+
+		assert.same(wins_before, #vim.api.nvim_list_wins())
+		assert.same(win_before, vim.api.nvim_get_current_win())
+		assert.same(2, vim.api.nvim_win_get_cursor(win_before)[1])
 	end)
 
 	it("warns on an empty stack", function()
-		store.save(root, {})
-		picker.remarks(root)
+		store.clear()
+		picker.remarks()
 		assert.same(0, #select_calls)
 		assert.same(1, #notifications)
 		assert.same(vim.log.levels.WARN, notifications[1].level)
@@ -330,34 +391,13 @@ describe("remarks picker", function()
 end)
 
 describe("agent picker", function()
-	local root
+	local cwd
 	local original_select
 	local select_calls
 	local match
 	local other_one
 	local other_two
 	local restore_telescope
-
-	before_each(function()
-		root = "/tmp/proj"
-		match = { pane_id = "p-match", cwd = "/tmp/proj", name = "reviewer", agent_status = "idle" }
-		other_one =
-			{ pane_id = "p-other-1", cwd = "/elsewhere", terminal_title_stripped = "π - x", agent_status = "working" }
-		other_two = { pane_id = "p-other-2", cwd = "/elsewhere-two", agent_status = "idle" }
-		original_select = vim.ui.select
-		select_calls = {}
-		vim.ui.select = function(items, opts, on_choice)
-			table.insert(select_calls, { items = items, opts = opts, on_choice = on_choice })
-		end
-	end)
-
-	after_each(function()
-		if restore_telescope then
-			restore_telescope()
-			restore_telescope = nil
-		end
-		vim.ui.select = original_select
-	end)
 
 	local function telescope_agent_stub(selected_entry)
 		local saved = {}
@@ -372,6 +412,7 @@ describe("agent picker", function()
 		end
 		local captured = { mappings = {} }
 		local prompt_bufnr = vim.api.nvim_create_buf(false, true)
+		captured.prompt_bufnr = prompt_bufnr
 		package.loaded["telescope.finders"] = {
 			new_table = function(options)
 				captured.last_finder = options
@@ -415,16 +456,37 @@ describe("agent picker", function()
 			end
 	end
 
+	before_each(function()
+		cwd = vim.fs.normalize(vim.fn.getcwd())
+		match = { pane_id = "p-match", cwd = cwd, name = "reviewer", agent_status = "idle" }
+		other_one =
+			{ pane_id = "p-other-1", cwd = "/elsewhere", terminal_title_stripped = "π - x", agent_status = "working" }
+		other_two = { pane_id = "p-other-2", cwd = "/elsewhere-two", agent_status = "idle" }
+		original_select = vim.ui.select
+		select_calls = {}
+		vim.ui.select = function(items, opts, on_choice)
+			table.insert(select_calls, { items = items, opts = opts, on_choice = on_choice })
+		end
+	end)
+
+	after_each(function()
+		if restore_telescope then
+			restore_telescope()
+			restore_telescope = nil
+		end
+		vim.ui.select = original_select
+	end)
+
 	it("opens telescope with cwd-first sorted entries and delivers the selected pane", function()
 		local chosen
 		local captured, restore = telescope_agent_stub({ value = other_one })
 		restore_telescope = restore
-		picker.agent({ other_one, match, other_two }, root, function(pane_id)
+		picker.agent({ other_one, match, other_two }, cwd, function(pane_id)
 			chosen = pane_id
 		end)
 
 		assert.same({ match, other_one, other_two }, captured.last_finder.results)
-		assert.same("reviewer · /tmp/proj · idle · p-match", captured.last_finder.entry_maker(match).display())
+		assert.same("reviewer · " .. cwd .. " · idle · p-match", captured.last_finder.entry_maker(match).display())
 		assert.same(
 			"π - x · /elsewhere · working · p-other-1",
 			captured.last_finder.entry_maker(other_one).display()
@@ -433,20 +495,19 @@ describe("agent picker", function()
 
 		captured.mappings["n:<CR>"]()
 		assert.same("p-other-1", chosen)
-		restore()
 	end)
 
 	it("asks through ui.select without telescope and delivers the chosen pane", function()
 		restore_telescope = disable_telescope()
 		local chosen
-		picker.agent({ other_one, match }, root, function(pane_id)
+		picker.agent({ other_one, match }, cwd, function(pane_id)
 			chosen = pane_id
 		end)
 
 		assert.same(1, #select_calls)
 		assert.same({ match, other_one }, select_calls[1].items)
 		assert.same(
-			"reviewer · /tmp/proj · idle · p-match",
+			"reviewer · " .. cwd .. " · idle · p-match",
 			select_calls[1].opts.format_item(select_calls[1].items[1])
 		)
 		select_calls[1].on_choice(select_calls[1].items[2])
@@ -456,7 +517,7 @@ describe("agent picker", function()
 	it("delivers nothing when the agent picker is cancelled", function()
 		restore_telescope = disable_telescope()
 		local chosen = "sentinel"
-		picker.agent({ match }, root, function(pane_id)
+		picker.agent({ match }, cwd, function(pane_id)
 			chosen = pane_id
 		end)
 		select_calls[1].on_choice(nil)

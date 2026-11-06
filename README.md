@@ -9,8 +9,8 @@ through `herdr`.
   `<C-e>` edit, `<C-s>` send; telescope when available, otherwise `vim.ui.select`.
 - `<leader>ps` - send all remarks as markdown to an agent picked from `herdr agent
   list` (project `cwd` first); the agent's turn is awaited in the background.
-- Remarks live in `stdpath("state")/pi-remarks/<sha256>.json` and are removed right
-  after a successful send - the stack always holds the unsent remainder.
+- Remarks live in memory for the lifetime of the nvim session: the stack holds only the
+  unsent remainder, sent remarks are removed right after a successful send.
 
 ## Dependencies
 
