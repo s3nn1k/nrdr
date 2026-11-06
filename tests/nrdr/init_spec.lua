@@ -332,7 +332,6 @@ describe("send deliver pipeline", function()
 
 		local git_diff = vim.system({ "git", "-C", repo, "diff", "-U3", "HEAD", "--", "src/a.go" }, { text = true })
 			:wait()
-		print("DBG GITDIFF:", git_diff.code, "OUTLEN:", #git_diff.stdout, "ERR:[", git_diff.stderr, "]")
 		local expected = diff.match_hunk(git_diff.stdout, 1, 1)
 		assert.truthy(expected, "git produced a diff")
 		assert.truthy(remarks[1].diff)
@@ -343,7 +342,9 @@ describe("send deliver pipeline", function()
 	end)
 
 	it("snapshots against the runtime diff base", function()
-		local repo = vim.fs.normalize(vim.fn.tempname()) .. "-base-repo"
+		vim.system = real_vim_system
+		local repo = "/tmp/nrdr-test-base-repo"
+		vim.fn.delete(repo, "rf")
 		local file = repo .. "/src/a.go"
 		vim.fn.mkdir(vim.fs.dirname(file), "p")
 		vim.fn.writefile({ "line one" }, file)
