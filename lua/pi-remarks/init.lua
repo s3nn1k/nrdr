@@ -61,7 +61,7 @@ function M.add_line(count)
 		notify_error(target_error)
 		return
 	end
-	local line_start = vim.api.nvim_win_get_cursor(0)[1]
+	local line_start = math.max(1, vim.api.nvim_win_get_cursor(0)[1])
 	local line_end = line_start + math.max(count, 1) - 1
 	open_comment_popup(path, line_start, line_end)
 end
@@ -72,7 +72,7 @@ function M.add_range(line_start, line_end)
 		notify_error(target_error)
 		return
 	end
-	open_comment_popup(path, line_start, line_end)
+	open_comment_popup(path, math.max(1, line_start), math.max(1, line_end))
 end
 
 function M.pick()
