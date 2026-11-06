@@ -88,7 +88,7 @@ describe("select_hunk", function()
 end)
 
 describe("match_hunk", function()
-	it("returns the header and body of the matching hunk", function()
+	it("returns the header and the whole body when the hunk fits the window", function()
 		local matched = diff.match_hunk(two_hunk_diff, 40, 45)
 		assert.same("@@ -36,9 +36,14 @@ func submitOrder(o Order) error {", matched.header)
 		assert.same(7, #matched.body)
@@ -99,66 +99,110 @@ describe("match_hunk", function()
 	end)
 end)
 
+describe("trim_body", function()
+	local function context_body(count)
+		local body = {}
+		for index = 1, count do
+			body[#body + 1] = " context " .. index
+		end
+		return body
+	end
+
+	it("keeps the whole body when the hunk fits the window", function()
+		local matched = { header = "@@ -1,10 +1,10 @@", body = context_body(10) }
+		local trimmed = diff.trim_body(matched, 5, 5)
+		assert.same({ header = "@@ -1,10 +1,10 @@", body = context_body(10) }, trimmed)
+	end)
+
+	it("trims a long hunk with markers on both sides", function()
+		local matched = { header = "@@ -1,40 +1,40 @@", body = context_body(40) }
+		local trimmed = diff.trim_body(matched, 18, 22)
+		assert.same("…", trimmed.body[1])
+		assert.same("…", trimmed.body[#trimmed.body])
+		assert.same(27, #trimmed.body)
+		assert.same(" context 8", trimmed.body[2])
+		assert.same(" context 32", trimmed.body[#trimmed.body - 1])
+	end)
+
+	it("shows the marker only below when the anchor starts at the hunk edge", function()
+		local matched = { header = "@@ -1,40 +1,40 @@", body = context_body(40) }
+		local trimmed = diff.trim_body(matched, 1, 5)
+		assert.same(" context 1", trimmed.body[1])
+		assert.same(" context 15", trimmed.body[#trimmed.body - 1])
+		assert.same("…", trimmed.body[#trimmed.body])
+	end)
+
+	it("keeps the no-newline marker inside the window", function()
+		local body = context_body(40)
+		body[#body + 1] = "\\ No newline at end of file"
+		local matched = { header = "@@ -1,41 +1,40 @@", body = body }
+		local trimmed = diff.trim_body(matched, 36, 41)
+		assert.same("\\ No newline at end of file", trimmed.body[#trimmed.body])
+	end)
+
+	it("drops the no-newline marker outside the window", function()
+		local body = context_body(40)
+		body[#body + 1] = "\\ No newline at end of file"
+		local matched = { header = "@@ -1,41 +1,40 @@", body = body }
+		local trimmed = diff.trim_body(matched, 1, 5)
+		assert.same(" context 15", trimmed.body[#trimmed.body - 1])
+		assert.same("…", trimmed.body[#trimmed.body])
+	end)
+end)
+
 describe("snapshot", function()
 	local repo
-
-	local function git(...)
-		return vim.system({ "git", "-C", repo, ... }, { text = true }):wait()
-	end
+	local file
 
 	before_each(function()
 		repo = vim.fs.normalize(vim.fn.tempname()) .. "-repo"
-		vim.fn.mkdir(repo, "p")
-		assert.same(0, git("init").code)
-		git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init")
-		local file = repo .. "/src/pay.go"
+		file = repo .. "/src/a.go"
 		vim.fn.mkdir(vim.fs.dirname(file), "p")
 		vim.fn.writefile({ "line one", "line two" }, file)
-		git("add", "src/pay.go")
-		assert.same(0, git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "file").code)
-	end)
-
-	after_each(function()
-		vim.fn.delete(repo, "rf")
+		vim.system({ "git", "-C", repo, "init" }, { text = true }):wait()
+		vim.system({ "git", "-C", repo, "add", "src/a.go" }, { text = true }):wait()
+		vim.system(
+			{ "git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "file" },
+			{ text = true }
+		)
+			:wait()
+		vim.fn.writefile({ "line one edited", "line two", "line three" }, file)
 	end)
 
 	it("snapshots the hunk overlapping the remark range", function()
-		vim.fn.writefile({ "line one edited", "line two", "line three" }, repo .. "/src/pay.go")
-		local snapshot = diff.snapshot(repo .. "/src/pay.go", 1, 1, "HEAD")
+		local snapshot = diff.snapshot(repo .. "/src/a.go", 1, 1, "HEAD")
 		assert.truthy(snapshot)
 		assert.truthy(snapshot.header:find("^@@ %-1,2 %+1,3 @@"))
 		assert.same({ "-line one", "+line one edited", " line two", "+line three" }, snapshot.body)
 	end)
 
 	it("returns nil for a remark range outside the diff", function()
-		vim.fn.writefile({ "line one edited" }, repo .. "/src/pay.go")
-		assert.is_nil(diff.snapshot(repo .. "/src/pay.go", 9, 9, "HEAD"))
+		assert.is_nil(diff.snapshot(repo .. "/src/a.go", 9, 9, "HEAD"))
 	end)
 
 	it("returns nil quietly outside a git repository", function()
 		local plain = vim.fs.normalize(vim.fn.tempname()) .. "-plain"
 		vim.fn.mkdir(plain, "p")
-		local file = plain .. "/a.lua"
-		vim.fn.writefile({ "x" }, file)
+		local plain_file = plain .. "/a.lua"
+		vim.fn.writefile({ "x" }, plain_file)
 		local notifications = {}
 		local original_notify = vim.notify
 		vim.notify = function(message, level)
 			table.insert(notifications, { message = message, level = level })
 		end
-		local snapshot = diff.snapshot(file, 1, 1, "HEAD")
+		local snapshot = diff.snapshot(plain_file, 1, 1, "HEAD")
 		vim.notify = original_notify
 		assert.is_nil(snapshot)
 		assert.same(0, #notifications)
 	end)
 
 	it("warns with a stderr snippet on other git failures", function()
-		local file = repo .. "/src/pay.go"
 		local notifications = {}
 		local original_notify = vim.notify
 		vim.notify = function(message, level)
 			table.insert(notifications, { message = message, level = level })
 		end
-		local snapshot = diff.snapshot(file, 1, 1, "--pi-remarks-invalid-base")
+		local snapshot = diff.snapshot(repo .. "/src/a.go", 1, 1, "--pi-remarks-invalid-base")
 		vim.notify = original_notify
 		assert.is_nil(snapshot)
 		assert.same(1, #notifications)
