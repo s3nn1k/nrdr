@@ -1,3 +1,4 @@
+local block = require("pi-remarks.block")
 local picker = require("pi-remarks.picker")
 local store = require("pi-remarks.store")
 
@@ -154,6 +155,7 @@ describe("remarks picker", function()
 		}
 		package.loaded["telescope.previewers"] = {
 			new_buffer_previewer = function(options)
+				captured.preview_options = options
 				return options
 			end,
 		}
@@ -269,6 +271,61 @@ describe("remarks picker", function()
 		assert.same(1, #remarks)
 		assert.same("второе", remarks[1].comment)
 		assert.same("правка поверх сдвига", remark_one.comment)
+	end)
+
+	it("previews the remark block with the diff filetype", function()
+		local with_diff = {
+			path = "/tmp/proj/a.lua",
+			relpath = "a.lua",
+			line_start = 1,
+			line_end = 1,
+			comment = "первое\nрасшифровка",
+			diff = {
+				header = "@@ -1 +1 @@",
+				body = { " context", "-old", "+new" },
+			},
+		}
+		store.clear()
+		store.add(with_diff)
+		local captured, restore = telescope_stub({ value = { index = 1, remark = with_diff } })
+		picker.remarks()
+
+		local target = vim.api.nvim_create_buf(false, true)
+		captured.preview_options.define_preview(
+			{ state = { bufnr = target } },
+			{ value = { index = 1, remark = with_diff } }
+		)
+
+		assert.same(vim.split(block.remark_block(with_diff), "\n"), vim.api.nvim_buf_get_lines(target, 0, -1, false))
+		assert.same("diff", vim.bo[target].filetype)
+		vim.api.nvim_buf_delete(target, { force = true })
+	end)
+
+	it("edits the comment through <C-e> and keeps the diff snapshot", function()
+		local with_diff = {
+			path = "/tmp/proj/a.lua",
+			relpath = "a.lua",
+			line_start = 1,
+			line_end = 1,
+			comment = "первое\nрасшифровка",
+			diff = {
+				header = "@@ -1 +1 @@",
+				body = { " context", "-old", "+new" },
+			},
+		}
+		store.clear()
+		store.add(with_diff)
+		local captured, restore = telescope_stub({ value = { index = 1, remark = with_diff } })
+		picker.remarks()
+
+		captured.mappings["n:<C-e>"]()
+		assert.same({ "первое", "расшифровка" }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "исправлено" })
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("ZZ", true, false, true), "mx", false)
+
+		local remarks = store.all()
+		assert.same("исправлено", remarks[1].comment)
+		assert.same(with_diff.diff, remarks[1].diff)
 	end)
 
 	it("sends remarks through <C-s> by asking for an agent", function()

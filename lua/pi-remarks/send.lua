@@ -1,3 +1,5 @@
+local block = require("pi-remarks.block")
+
 local M = {}
 
 local function failure_output(done)
@@ -5,27 +7,12 @@ local function failure_output(done)
 	return vim.trim(output)
 end
 
-local function line_span(remark)
-	if remark.line_start == remark.line_end then
-		return tostring(remark.line_start)
-	end
-	return remark.line_start .. "-" .. remark.line_end
-end
-
 function M.build_message(remarks)
-	local lines = {}
-	for index, remark in ipairs(remarks) do
-		if index > 1 then
-			lines[#lines + 1] = ""
-		end
-		lines[#lines + 1] = ("файл: %s:%s"):format(remark.path, line_span(remark))
-		local comment_lines = vim.split(remark.comment, "\n")
-		lines[#lines + 1] = "комментарий: " .. comment_lines[1]
-		for line_index = 2, #comment_lines do
-			lines[#lines + 1] = "  " .. comment_lines[line_index]
-		end
+	local blocks = {}
+	for _, remark in ipairs(remarks) do
+		blocks[#blocks + 1] = block.remark_block(remark)
 	end
-	return table.concat(lines, "\n")
+	return table.concat(blocks, "\n\n")
 end
 
 local max_error_snippet = 120

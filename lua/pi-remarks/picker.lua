@@ -1,3 +1,4 @@
+local block = require("pi-remarks.block")
 local popup = require("pi-remarks.popup")
 local store = require("pi-remarks.store")
 
@@ -15,7 +16,7 @@ local function remark_line(remark)
 end
 
 function M.remark_entry(remark)
-	return remark.relpath .. ":" .. remark_line(remark)
+	return remark.relpath .. ":" .. block.line_span(remark)
 end
 
 function M.remark_entry_with_preview(remark)
@@ -103,9 +104,16 @@ end
 
 local function remark_previewer(previewers)
 	return previewers.new_buffer_previewer({
-		title = " comment ",
+		title = " pi-remarks ",
 		define_preview = function(self, entry)
-			vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, vim.split(entry.value.remark.comment, "\n"))
+			vim.api.nvim_buf_set_lines(
+				self.state.bufnr,
+				0,
+				-1,
+				false,
+				vim.split(block.remark_block(entry.value.remark), "\n")
+			)
+			vim.bo[self.state.bufnr].filetype = "diff"
 		end,
 	})
 end

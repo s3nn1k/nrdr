@@ -1,3 +1,4 @@
+local diff = require("pi-remarks.diff")
 local picker = require("pi-remarks.picker")
 local popup = require("pi-remarks.popup")
 local send = require("pi-remarks.send")
@@ -8,6 +9,7 @@ local M = {}
 local defaults = {
 	herdr_bin = "herdr",
 	wait_timeout_ms = 600000,
+	diff_base = "HEAD",
 	turn_start_timeout_ms = 15000,
 }
 
@@ -37,25 +39,41 @@ function M.setup(opts)
 	config = vim.tbl_deep_extend("force", defaults, opts or {})
 end
 
+local function diff_panel_guard()
+	if vim.wo.diff and not vim.bo.modifiable then
+		vim.notify(
+			"pi-remarks: старая ревизия диффа — добавляй из правой панели",
+			vim.log.levels.WARN
+		)
+		return false
+	end
+	return true
+end
+
 local function open_comment_popup(path, line_start, line_end)
 	popup.open({
 		on_confirm = function(comment)
 			if not comment then
 				return
 			end
+			local line_a, line_b = math.min(line_start, line_end), math.max(line_start, line_end)
 			local cwd = vim.fs.normalize(vim.fn.getcwd())
 			store.add({
 				path = path,
 				relpath = vim.fs.relpath(cwd, path) or path,
-				line_start = math.min(line_start, line_end),
-				line_end = math.max(line_start, line_end),
+				line_start = line_a,
+				line_end = line_b,
 				comment = comment,
+				diff = diff.snapshot(path, line_a, line_b, config.diff_base),
 			})
 		end,
 	})
 end
 
 function M.add_line(count)
+	if not diff_panel_guard() then
+		return
+	end
 	local path, target_error = file_path()
 	if target_error then
 		notify_error(target_error)
@@ -67,6 +85,9 @@ function M.add_line(count)
 end
 
 function M.add_range(line_start, line_end)
+	if not diff_panel_guard() then
+		return
+	end
 	local path, target_error = file_path()
 	if target_error then
 		notify_error(target_error)

@@ -1,16 +1,12 @@
 # pi-remarks
 
-Neovim plugin: collect code-review remarks for a project and hand them to a pi agent
-through `herdr`.
+Neovim plugin: collect code-review remarks for a project and hand them to a pi agent through `herdr`.
 
-- `<leader>pc` (n/v) - stack a remark for the cursor line (+ count) or the visual
-  selection; a floating popup takes the comment (`ZZ` confirm, `q` cancel).
-- `<leader>pb` - picker over the stored remarks: `<CR>` jump, `<C-d>` delete,
-  `<C-e>` edit, `<C-s>` send; telescope when available, otherwise `vim.ui.select`.
-- `<leader>ps` - send all remarks as markdown to an agent picked from `herdr agent
-  list` (project `cwd` first); the background wait covers the turn starting and finishing.
-- Remarks live in memory for the lifetime of the nvim session: the stack holds only the
-  unsent remainder, sent remarks are removed right after a successful send.
+- `<leader>pc` (n/v) - stack a remark for the cursor line (+ count) or the visual selection; a floating popup takes the comment (`ZZ` confirm, `q` cancel).
+- Each remark snapshots its diff hunk at add time (`git diff -U3 <diff_base> -- <file>`); the picker preview and the sent message render it next to the comment.
+- `<leader>pb` - picker over the stored remarks: `<CR>` jump, `<C-d>` delete, `<C-e>` edit, `<C-x>` clear, `<C-s>` send; telescope when available, otherwise `vim.ui.select`.
+- `<leader>ps` - send all remarks as markdown to an agent picked from `herdr agent list` (project `cwd` first); the background wait covers the turn starting and finishing.
+- Remarks live in memory for the lifetime of the nvim session; the stack holds only the unsent remainder, sent remarks are removed right after a successful send.
 
 ## Dependencies
 
@@ -20,8 +16,7 @@ through `herdr`.
 
 ## Setup
 
-`setup()` keys are optional: `herdr_bin` (`"herdr"`), `wait_timeout_ms` (`600000`),
-`turn_start_timeout_ms` (`15000`).
+`setup()` keys are optional: `herdr_bin` (`"herdr"`), `wait_timeout_ms` (`600000`), `turn_start_timeout_ms` (`15000`), `diff_base` (`"HEAD"`).
 
 ## lazy.nvim spec
 

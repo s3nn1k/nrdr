@@ -300,6 +300,52 @@ describe("send deliver pipeline", function()
 		assert.same("term", spawns_of("wait")[1].kill_signal)
 	end)
 
+	it("stores the diff snapshot with add_line in a git repository", function()
+		local repo = vim.fs.normalize(vim.fn.tempname()) .. "-repo"
+		vim.fn.mkdir(repo, "p")
+		vim.system({ "git", "-C", repo, "init" }, { text = true }):wait()
+		local file = repo .. "/src/a.go"
+		vim.fn.mkdir(vim.fs.dirname(file), "p")
+		vim.fn.writefile({ "line one", "line two" }, file)
+		vim.system({ "git", "-C", repo, "add", "src/a.go" }, { text = true }):wait()
+		vim.system(
+			{ "git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "file" },
+			{ text = true }
+		)
+			:wait()
+		vim.fn.writefile({ "line one edited", "line two", "line three" }, file)
+
+		local buf = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_buf_set_name(buf, file)
+		vim.api.nvim_set_current_buf(buf)
+		vim.api.nvim_win_set_cursor(0, { 1, 0 })
+		pi.add_line(0)
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("iснапшот<Esc>ZZ", true, false, true), "mx", false)
+
+		local remarks = store.all()
+		assert.same(1, #remarks)
+		assert.same("снапшот", remarks[1].comment)
+		assert.truthy(remarks[1].diff)
+		assert.truthy(remarks[1].diff.header:find("^@@ %-1,2 %+1,3 @@"))
+		assert.same({ "-line one", "+line one edited", "+line three" }, remarks[1].diff.body)
+		vim.fn.delete(repo, "rf")
+	end)
+
+	it("refuses adds from the read-only diff pane", function()
+		local scratch = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_set_current_buf(scratch)
+		vim.bo[scratch].modifiable = false
+		vim.wo.diff = true
+		local wins_before = #vim.api.nvim_list_wins()
+
+		pi.add_line(0)
+
+		vim.wo.diff = false
+		vim.bo[scratch].modifiable = true
+		assert.truthy(find_notification(vim.log.levels.WARN, "старая ревизия диффа"))
+		assert.same(wins_before, #vim.api.nvim_list_wins())
+	end)
+
 	it("does not touch the stack when the agent picker is cancelled", function()
 		store.add(remark("a.lua", "первое"))
 		local prompts_before = #spawns_of("prompt")

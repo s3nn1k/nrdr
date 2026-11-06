@@ -7,13 +7,17 @@ local agent_list_fixture = [[
 local fixture_agents = vim.json.decode(agent_list_fixture).result.agents
 
 describe("build_message", function()
-	it("renders absolute paths and comment blocks separated by blank lines", function()
+	it("renders remark blocks with diff hunks separated by blank lines", function()
 		local message = send.build_message({
 			{
 				path = "/abs/src/a.lua",
 				line_start = 3,
 				line_end = 7,
 				comment = "первая строка\nвторая строка",
+				diff = {
+					header = "@@ -1,2 +1,3 @@",
+					body = { " context", "-old line", "+new line" },
+				},
 			},
 			{ path = "/abs/b.go", line_start = 1, line_end = 1, comment = "одиночный комментарий" },
 		})
@@ -22,12 +26,17 @@ describe("build_message", function()
 				"файл: /abs/src/a.lua:3-7",
 				"комментарий: первая строка",
 				"  вторая строка",
+				" context",
+				"-old line",
+				"+new line",
 				"",
 				"файл: /abs/b.go:1",
 				"комментарий: одиночный комментарий",
 			}, "\n"),
 			message
 		)
+		local _, blank_lines = message:gsub("\n\n", "")
+		assert.same(1, blank_lines)
 	end)
 end)
 
